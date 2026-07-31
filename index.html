@@ -421,6 +421,15 @@
   .boost-name .hint{font-size:11px; font-weight:600; color:var(--muted); text-transform:none; margin-left:6px}
 
   /* New Boost form (Boosts tab) */
+  .nb-summary{
+    list-style:none; cursor:pointer; user-select:none; display:flex; align-items:center; gap:6px;
+    margin:0; font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); font-weight:800;
+  }
+  .nb-summary::-webkit-details-marker{display:none}
+  .nb-summary::before{content:"▸"; transition:transform .15s; flex:0 0 auto}
+  .nb-details[open]>.nb-summary::before{transform:rotate(90deg)}
+  .nb-summary .hint{margin-left:auto; text-transform:none; letter-spacing:0; font-weight:600; text-align:right}
+  .nb-details[open]>.nb-summary{margin-bottom:12px}
   .nb-name-field{margin-bottom:10px}
   .nb-name-field label{display:block; font-size:11px; font-weight:700; text-transform:uppercase;
     letter-spacing:.06em; color:var(--muted); margin-bottom:6px}
@@ -813,15 +822,15 @@ function boostsOwnedHTML(){
       <input id="nb-${esc(n)}" type="number" inputmode="numeric" step="1" placeholder="0" data-nb-attr="${esc(n)}">
     </div>`).join("");
 
-  const newBoostForm = `<div class="panel">
-    <h3>New Boost</h3>
+  const newBoostForm = `<details class="panel nb-details">
+    <summary class="nb-summary">New Boost<span class="hint">the game adds these faster than this list can track</span></summary>
     <div class="nb-name-field">
       <label for="nb-name">Name</label>
       <input id="nb-name" type="text" placeholder="e.g. Nova" data-nb-name>
     </div>
     <div class="nb-grid">${attrFields}</div>
     <button type="button" class="nb-add" data-nb-add>Add Boost</button>
-  </div>`;
+  </details>`;
 
   return `<div class="rt-note">Set how many of each consumable Boost you currently own — used by Loadouts →
     By Track to suggest one for the selected circuit. These are flat, whole-race bonuses, separate from the
