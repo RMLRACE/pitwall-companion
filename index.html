@@ -401,6 +401,24 @@
   .trk-driver-card .trk-dval{font-size:20px; font-weight:800}
   .trk-driver-card .trk-dval .delta{font-size:12px; margin-left:4px}
 
+  /* suggested boost (Loadouts — By Track) */
+  .trk-boost-row{display:flex; align-items:center; gap:10px; padding:8px 4px;
+    border-bottom:1px solid var(--line)}
+  .trk-boost-row:last-child{border-bottom:0}
+  .trk-boost-rank{font-size:11px; font-weight:800; color:var(--muted); flex:0 0 auto}
+  .trk-boost-main{flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:3px}
+  .trk-boost-name{font-weight:700; font-size:13.5px}
+  .trk-boost-stats{display:flex; flex-wrap:wrap; gap:4px}
+  .trk-boost-stat{font-size:10.5px; color:var(--muted); background:var(--surface-2);
+    border:1px solid var(--line); border-radius:999px; padding:2px 7px}
+  .trk-boost-stat.hot{border-color:var(--accent); color:var(--text)}
+  .trk-boost-qty{font-size:13px; font-weight:800; color:var(--text); flex:0 0 auto}
+
+  /* Boosts tab (quantities owned) */
+  .boost-row{padding:12px}
+  .boost-head{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px}
+  .boost-name{font-weight:800; font-size:14.5px}
+
   /* compare */
   .cmp-scope{display:flex; gap:6px; background:var(--surface); border:1px solid var(--line);
     border-radius:12px; padding:4px; margin-bottom:10px}
@@ -480,6 +498,11 @@ const BOOST_PCT = 0.10;    // global "Boost %" from the workbook Data Input shee
 // Suggested-Loadouts attribute picker — own namespaced, schema-guarded key.
 const LOADOUT_ATTRS_KEY = "f1sheet.loadoutAttrs.v1";
 const LOADOUT_ATTRS_SCHEMA = 1;
+
+// Quantities owned of each named consumable Boost — own namespaced, schema-guarded key.
+// Distinct from BOOST_KEY/boostedIds above, which is the unrelated per-card "+10%" slot toggle.
+const BOOST_OWNED_KEY = "f1sheet.boostOwned.v1";
+const BOOST_OWNED_SCHEMA = 1;
 
 /* ---------- Reward & payout reference tables (from workbook "CCData",
    identical in v1.0 and v1.1) ---------- */
@@ -728,6 +751,28 @@ const REF = {"d:Common:Bottas":{"r":"Common","g":"Common","k":"d","n":["overtaki
    Flat per-race stat bonuses. 65 unique boosts; the sheet lists them multiple
    times across rarity sections (raw row count ~214 incl. blank/header rows). */
 const BOOSTS = [{"n":"Ballast","b":{"Race Start":5,"Cornering":10,"Pit Time":5},"t":20},{"n":"Butterfly","b":{"Tyre Use":20,"Power Unit":25,"Pit Time":5},"t":50},{"n":"Champion","b":{"Race Start":10,"Speed":25,"Power Unit":15},"t":50},{"n":"Christmas","b":{"Overtaking":10,"Speed":20,"Cornering":20},"t":50},{"n":"Confetti","b":{"Overtaking":10,"Race Start":25,"Pit Time":15},"t":50},{"n":"Cranberry","b":{"Overtaking":20,"Defending":20,"Cornering":10},"t":50},{"n":"Crown","b":{"Defending":5,"Tyre Use":20,"Pit Time":25},"t":50},{"n":"Cuppa","b":{"Overtaking":10,"Race Start":20,"Cornering":20},"t":50},{"n":"Dead Fast","b":{"Tyre Use":5,"Speed":25,"Power Unit":20},"t":50},{"n":"Djinn","b":{"Defending":15,"Cornering":15,"Power Unit":20},"t":50},{"n":"Downforce","b":{"Defending":10,"Tyre Use":15,"Cornering":5},"t":30},{"n":"Dragon","b":{"Overtaking":20,"Tyre Use":15,"Power Unit":15},"t":50},{"n":"Eagle","b":{"Tyre Use":20,"Speed":15,"Pit Time":15},"t":50},{"n":"Eclipse","b":{"Overtaking":15,"Speed":25,"Pit Time":10},"t":50},{"n":"Eggcepton","b":{"Defending":15,"Power Unit":10,"Pit Time":25},"t":50},{"n":"Eternal Flame","b":{"Overtaking":25,"Tyre Use":10,"Speed":15},"t":50},{"n":"Feral","b":{"Overtaking":25,"Tyre Use":15,"Pit Time":10},"t":50},{"n":"Firework","b":{"Overtaking":15,"Race Start":15,"Speed":20},"t":50},{"n":"Frost","b":{"Race Start":15,"Tyre Use":25,"Power Unit":10},"t":50},{"n":"Full Send","b":{"Overtaking":5,"Speed":25,"Power Unit":20},"t":50},{"n":"Genesis","b":{"Defending":25,"Speed":10,"Cornering":15},"t":50},{"n":"Ghoulfuel","b":{"Overtaking":25,"Power Unit":10,"Pit Time":15},"t":50},{"n":"Gladiator","b":{"Defending":25,"Race Start":15,"Power Unit":10},"t":50},{"n":"Glitz","b":{"Overtaking":15,"Cornering":15,"Power Unit":20},"t":50},{"n":"Handlebar","b":{"Defending":25,"Tyre Use":15,"Cornering":10},"t":50},{"n":"Heartbreaker","b":{"Overtaking":15,"Race Start":20,"Speed":20},"t":55},{"n":"Herald","b":{"Overtaking":10,"Race Start":25,"Cornering":15},"t":50},{"n":"Hex","b":{"Overtaking":20,"Speed":15,"Pit Time":5},"t":40},{"n":"Hook","b":{"Defending":15,"Race Start":10,"Cornering":25},"t":50},{"n":"Impact","b":{"Overtaking":15,"Speed":10,"Power Unit":5},"t":30},{"n":"Instinct","b":{"Race Start":10,"Tyre Use":5,"Power Unit":15},"t":30},{"n":"Iron Force","b":{"Defending":20,"Tyre Use":10,"Power Unit":20},"t":50},{"n":"Kawaii","b":{"Race Start":15,"Cornering":20,"Pit Time":15},"t":50},{"n":"Launch Pad","b":{"Race Start":25,"Power Unit":15,"Pit Time":10},"t":50},{"n":"Livewire","b":{"Tyre Use":20,"Speed":15,"Impact":15},"t":50},{"n":"Lumberjack","b":{"Defending":15,"Tyre Use":10,"Pit Time":25},"t":50},{"n":"Merlion","b":{"Speed":15,"Cornering":25,"Pit Time":10},"t":50},{"n":"Movember","b":{"Defending":15,"Tyre Use":10,"Cornering":25},"t":50},{"n":"Nazar","b":{"Race Start":20,"Tyre Use":15,"Cornering":15},"t":50},{"n":"Oud","b":{"Overtaking":15,"Cornering":10,"Pit Time":25},"t":50},{"n":"Overcharge","b":{"Race Start":20,"Speed":15,"Recharge":15},"t":50},{"n":"Palm","b":{"Defending":20,"Race Start":10,"Tyre Use":20},"t":50},{"n":"Pretzel","b":{"Tyre Use":25,"Power Unit":15,"Pit Time":10},"t":50},{"n":"Prince","b":{"Defending":10,"Race Start":20,"Cornering":20},"t":50},{"n":"Pumpkin","b":{"Race Start":10,"Tyre Use":20,"Cornering":20},"t":50},{"n":"Rainbow","b":{"Defending":25,"Race Start":5,"Speed":20},"t":50},{"n":"Reindeer","b":{"Defending":20,"Cornering":10,"Pit Time":20},"t":50},{"n":"Rookie Reload","b":{"Overtaking":5,"Cornering":20,"Power Unit":25},"t":50},{"n":"Rookie Rush","b":{"Defending":15,"Race Start":10,"Tyre Use":25},"t":50},{"n":"Rooster","b":{"Overtaking":20,"Race Start":20,"Power Unit":10},"t":50},{"n":"Samba","b":{"Speed":5,"Power Unit":25,"Pit Time":20},"t":50},{"n":"Schooner","b":{"Defending":10,"Race Start":25,"Pit Time":15},"t":50},{"n":"Self Control","b":{"Tyre Use":5,"Cornering":5,"Power Unit":5},"t":15},{"n":"Skull","b":{"Overtaking":15,"Speed":25,"Power Unit":10},"t":50},{"n":"Street Shark","b":{"Overtaking":10,"Race Start":25,"Speed":15},"t":50},{"n":"Surf","b":{"Race Start":25,"Tyre Use":5,"Power Unit":20},"t":50},{"n":"Taurus","b":{"Overtaking":5,"Speed":20,"Power Unit":25},"t":50},{"n":"Timeless","b":{"Race Start":15,"Speed":10,"Cornering":25},"t":50},{"n":"Tire Water","b":{"Tyre Use":10,"Cornering":5,"Pit Time":5},"t":20},{"n":"Tsar","b":{"Defending":10,"Tyre Use":25,"Cornering":15},"t":50},{"n":"Tulip","b":{"Defending":10,"Speed":20,"Pit Time":20},"t":50},{"n":"Tune-In","b":{"Speed":10,"Cornering":15,"Pit Time":25},"t":50},{"n":"Unstoppable","b":{"Overtaking":25,"Speed":15,"Power Unit":10},"t":50},{"n":"Vice","b":{"Defending":25,"Speed":10,"Power Unit":15},"t":50},{"n":"Warrior","b":{"Overtaking":5,"Defending":5,"Speed":10},"t":20}];
+// DRIVER_STAT_LABELS uses "Tyre Mgmt"; the Boosts data (like the workbook) calls it "Tyre Use".
+function boostDsKey(ds){ return ds === "Tyre Mgmt" ? "Tyre Use" : ds; }
+
+function boostsOwnedHTML(q){
+  const list = BOOSTS.filter(b => !q || b.n.toLowerCase().includes(q));
+  if(!list.length) return `<div class="empty">No boost matches “${esc(query)}”.</div>`;
+  const rows = list.map(b => {
+    const qty = boostOwned[b.n] || 0;
+    const chips = Object.entries(b.b).map(([k,v]) => `<span class="lo-stat">${esc(k)} <b>+${v}</b></span>`).join("");
+    return `<div class="panel boost-row" data-boost="${esc(b.n)}">
+      <div class="boost-head"><span class="boost-name">${esc(b.n)}</span>
+        <div class="amt"><label for="bq-${esc(b.n)}">Owned</label>
+          <input id="bq-${esc(b.n)}" type="number" inputmode="numeric" min="0" step="1" value="${qty}"
+            data-act="boostqty" aria-label="Quantity owned for ${esc(b.n)}"></div>
+      </div>
+      <div class="lo-aggs">${chips}</div>
+    </div>`;
+  }).join("");
+  return `<div class="rt-note">Set how many of each consumable Boost you currently own. Used by Loadouts → By
+    Track to suggest one for the selected circuit. These are flat, whole-race bonuses — separate from the
+    per-card “Boosted +10%” slot toggle on Drivers/Parts.</div>${rows}`;
+}
 
 /* ---------- State ---------- */
 let overrides = {};        // { id: {level, amount} }
@@ -744,6 +789,7 @@ let boostedIds = {};       // { id: true } cards toggled to +10% boosted
 let loadoutAttrs = new Set(["Speed"]); // Suggested Loadouts: selected optimization attributes
 let loadoutMode = "attr";          // Loadouts sub-mode: "attr" (by attribute) | "track" (by Track Spec)
 let loadoutTrack = "Abu Dhabi";    // Loadouts "By Track" mode: selected circuit name (see TRACKS below)
+let boostOwned = {};              // { boostName: quantity } — how many of each consumable Boost you own
 
 function load(){
   try{
@@ -828,6 +874,26 @@ function saveLoadoutAttrs(){
     localStorage.setItem(LOADOUT_ATTRS_KEY, JSON.stringify({
       schema:LOADOUT_ATTRS_SCHEMA, attrs:[...loadoutAttrs], mode:loadoutMode, track:loadoutTrack,
       savedAt:new Date().toISOString()
+    }));
+  }catch(e){ toast("Couldn't save — storage full?"); }
+}
+
+/* ---------- Boost quantities owned ---------- */
+function loadBoostOwned(){
+  boostOwned = {};
+  try{
+    const raw = localStorage.getItem(BOOST_OWNED_KEY);
+    if(!raw) return;
+    const data = JSON.parse(raw);
+    if(data && typeof data === "object" && data.schema === BOOST_OWNED_SCHEMA && data.qty){
+      boostOwned = data.qty;
+    }
+  }catch(e){ /* corrupt storage -> none owned */ }
+}
+function saveBoostOwned(){
+  try{
+    localStorage.setItem(BOOST_OWNED_KEY, JSON.stringify({
+      schema:BOOST_OWNED_SCHEMA, qty:boostOwned, savedAt:new Date().toISOString()
     }));
   }catch(e){ toast("Couldn't save — storage full?"); }
 }
@@ -1445,7 +1511,7 @@ function ownedCards(kind){
 }
 
 function toolNav(){
-  const items = [["drivers","Drivers"],["loadouts","Loadouts"],["compare","Compare"]];
+  const items = [["drivers","Drivers"],["loadouts","Loadouts"],["compare","Compare"],["boosts","Boosts"]];
   return `<div class="subnav" role="tablist" aria-label="Tools view">` + items.map(([k,l]) =>
     `<button role="tab" data-tv="${k}" aria-selected="${k===toolView}">${l}</button>`).join("") + `</div>`;
 }
@@ -1455,6 +1521,7 @@ function renderTools(){
   let body;
   if(toolView === "loadouts") body = suggestLoadoutsHTML();
   else if(toolView === "compare") body = compareHTML(q);
+  else if(toolView === "boosts") body = boostsOwnedHTML(q);
   else body = suggestDriversHTML(q);
   app.innerHTML = `<div class="tools">${toolNav()}${body}</div>`;
 }
@@ -1655,6 +1722,33 @@ function trackSpecHTML(){
     driversBlock = `<div class="trk-drivers-grid">${cards}</div>`;
   }
 
+  // Suggested Boosts: rank owned boosts (qty > 0) by the driver stat first, the component
+  // stat as tiebreak — top 3.
+  const dsKey = boostDsKey(track.ds);
+  const ownedBoosts = BOOSTS.filter(b => (boostOwned[b.n] || 0) > 0);
+  let boostBlock;
+  if(!ownedBoosts.length){
+    boostBlock = `<div class="empty">No boosts owned yet. Set quantities on the Boosts tab.</div>`;
+  }else{
+    const ranked = ownedBoosts.map(b => ({
+      b, dsVal: b.b[dsKey] || 0, csVal: b.b[track.cs] || 0
+    })).sort((a,b) => (b.dsVal - a.dsVal) || (b.csVal - a.csVal) || a.b.n.localeCompare(b.b.n))
+      .slice(0, 3);
+    const rows = ranked.map((r, idx) => {
+      const stats = Object.entries(r.b.b).map(([k,v]) =>
+        `<span class="trk-boost-stat${k===dsKey||k===track.cs?' hot':''}">${esc(k)} +${v}</span>`).join("");
+      return `<div class="trk-boost-row">
+        <span class="trk-boost-rank">#${idx+1}</span>
+        <span class="trk-boost-main">
+          <span class="trk-boost-name">${esc(r.b.n)}</span>
+          <span class="trk-boost-stats">${stats}</span>
+        </span>
+        <span class="trk-boost-qty">×${boostOwned[r.b.n]}</span>
+      </div>`;
+    }).join("");
+    boostBlock = `<div class="panel"><h3>Suggested Boost<span class="hint">top ${ranked.length}</span></h3>${rows}</div>`;
+  }
+
   let loadoutBlock;
   if(ownedCards("c").length){
     const lo = bestLoadout({t:[track.cs]});
@@ -1664,9 +1758,9 @@ function trackSpecHTML(){
   }
 
   return `<div class="rt-note">Each circuit's in-game <b>Track Stats</b> spotlight one driver stat and one
-    component stat. Pick a track to see your best 2 owned drivers for its driver stat, and your best owned
-    loadout for its component stat — both computed live from your collection.</div>
-    ${select}${statChips}${driversBlock}${loadoutBlock}`;
+    component stat. Pick a track to see your best 2 owned drivers for its driver stat, your best owned loadout
+    for its component stat, and a suggested consumable Boost — all computed live from your collection.</div>
+    ${select}${statChips}${driversBlock}${boostBlock}${loadoutBlock}`;
 }
 
 /* ----- 5) Compare: sortable side-by-side table at current levels ----- */
@@ -1934,6 +2028,21 @@ app.addEventListener("input", (e) => {
 });
 app.addEventListener("change", (e) => {
   const input = e.target.closest('input[data-act="amt"]');
+  if(!input) return;
+  input.value = Math.max(0, Math.floor(+input.value || 0));  // normalize display
+});
+
+// Boost quantity-owned edits (debounced persistence on change/blur).
+app.addEventListener("input", (e) => {
+  const input = e.target.closest('input[data-act="boostqty"]');
+  if(!input) return;
+  const row = input.closest("[data-boost]");
+  const qty = Math.max(0, Math.floor(+input.value || 0));
+  if(qty > 0) boostOwned[row.dataset.boost] = qty; else delete boostOwned[row.dataset.boost];
+  saveBoostOwned();
+});
+app.addEventListener("change", (e) => {
+  const input = e.target.closest('input[data-act="boostqty"]');
   if(!input) return;
   input.value = Math.max(0, Math.floor(+input.value || 0));  // normalize display
 });
@@ -2209,6 +2318,7 @@ load();
 loadSeason();
 loadBoosted();
 loadLoadoutAttrs();
+loadBoostOwned();
 render();
 
 // Register the service worker with a relative path (works under /<repo>/).
