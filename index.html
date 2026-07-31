@@ -360,9 +360,9 @@
   .boost-tog input{width:18px; height:18px; accent-color:var(--gold)}
 
   /* suggested loadouts */
-  .lo-attr-bar{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px}
+  .lo-attr-bar{display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:10px}
   .lo-attr-bar button{border:1px solid var(--line); background:var(--surface); border-radius:999px;
-    padding:8px 14px; min-height:var(--tap); font-weight:700; color:var(--muted)}
+    padding:8px 14px; min-height:var(--tap); font-weight:700; color:var(--muted); text-align:center}
   .lo-attr-bar button[aria-pressed="true"]{background:var(--red); color:var(--red-ink); border-color:var(--red)}
   .lo-card{padding:12px}
   .lo-card h3{margin:0 0 8px; font-size:14px; font-weight:800; display:flex; align-items:center}
