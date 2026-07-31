@@ -383,9 +383,23 @@
   .lo-part>span:last-child{text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   .lo-part.empty{opacity:.6}
 
-  /* tracks */
-  .trk-you{display:flex; flex-direction:column; gap:5px; margin-top:10px; font-size:12.5px; color:var(--muted)}
-  .trk-you b{color:var(--text)}
+  /* loadouts — by track */
+  .trk-select-wrap{margin-bottom:10px}
+  .trk-select-wrap label{display:block; font-size:11px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.06em; color:var(--muted); margin-bottom:6px}
+  .trk-select{width:100%; min-height:var(--tap); border:1px solid var(--line); border-radius:10px;
+    background:var(--surface-2); color:var(--text); font-weight:700; font-size:15px; padding:0 12px;
+    appearance:none; -webkit-appearance:none;
+    background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%239aa6c2" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>');
+    background-repeat:no-repeat; background-position:right 12px center; background-size:18px}
+  .trk-drivers-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px}
+  .trk-driver-card{padding:12px}
+  .trk-driver-card .trk-rank{font-size:10px; font-weight:800; letter-spacing:.06em; color:var(--accent);
+    text-transform:uppercase; margin-bottom:4px}
+  .trk-driver-card .trk-dname{font-size:15px; font-weight:800; margin-bottom:2px}
+  .trk-driver-card .trk-dsub{font-size:11px; color:var(--muted); margin-bottom:8px}
+  .trk-driver-card .trk-dval{font-size:20px; font-weight:800}
+  .trk-driver-card .trk-dval .delta{font-size:12px; margin-left:4px}
 
   /* compare */
   .cmp-scope{display:flex; gap:6px; background:var(--surface); border:1px solid var(--line);
@@ -728,6 +742,8 @@ let cmpKind = "d";         // Compare scope: "d" drivers | "c" components
 let cmpSort = {stat:"tot", dir:-1}; // Compare active sort
 let boostedIds = {};       // { id: true } cards toggled to +10% boosted
 let loadoutAttrs = new Set(["Speed"]); // Suggested Loadouts: selected optimization attributes
+let loadoutMode = "attr";          // Loadouts sub-mode: "attr" (by attribute) | "track" (by Track Spec)
+let loadoutTrack = "Abu Dhabi";    // Loadouts "By Track" mode: selected circuit name (see TRACKS below)
 
 function load(){
   try{
@@ -800,15 +816,18 @@ function loadLoadoutAttrs(){
     const raw = localStorage.getItem(LOADOUT_ATTRS_KEY);
     if(!raw) return;
     const data = JSON.parse(raw);
-    if(data && typeof data === "object" && data.schema === LOADOUT_ATTRS_SCHEMA && Array.isArray(data.attrs) && data.attrs.length){
-      loadoutAttrs = new Set(data.attrs);
+    if(data && typeof data === "object" && data.schema === LOADOUT_ATTRS_SCHEMA){
+      if(Array.isArray(data.attrs) && data.attrs.length) loadoutAttrs = new Set(data.attrs);
+      if(data.mode === "attr" || data.mode === "track") loadoutMode = data.mode;
+      if(typeof data.track === "string" && data.track) loadoutTrack = data.track;
     }
   }catch(e){ /* corrupt storage -> keep default */ }
 }
 function saveLoadoutAttrs(){
   try{
     localStorage.setItem(LOADOUT_ATTRS_KEY, JSON.stringify({
-      schema:LOADOUT_ATTRS_SCHEMA, attrs:[...loadoutAttrs], savedAt:new Date().toISOString()
+      schema:LOADOUT_ATTRS_SCHEMA, attrs:[...loadoutAttrs], mode:loadoutMode, track:loadoutTrack,
+      savedAt:new Date().toISOString()
     }));
   }catch(e){ toast("Couldn't save — storage full?"); }
 }
@@ -1426,7 +1445,7 @@ function ownedCards(kind){
 }
 
 function toolNav(){
-  const items = [["drivers","Drivers"],["loadouts","Loadouts"],["compare","Compare"],["tracks","Tracks"]];
+  const items = [["drivers","Drivers"],["loadouts","Loadouts"],["compare","Compare"]];
   return `<div class="subnav" role="tablist" aria-label="Tools view">` + items.map(([k,l]) =>
     `<button role="tab" data-tv="${k}" aria-selected="${k===toolView}">${l}</button>`).join("") + `</div>`;
 }
@@ -1436,7 +1455,6 @@ function renderTools(){
   let body;
   if(toolView === "loadouts") body = suggestLoadoutsHTML();
   else if(toolView === "compare") body = compareHTML(q);
-  else if(toolView === "tracks") body = tracksHTML(q);
   else body = suggestDriversHTML(q);
   app.innerHTML = `<div class="tools">${toolNav()}${body}</div>`;
 }
@@ -1514,18 +1532,11 @@ function bestLoadout(strat){
   return {picks, agg, total, team, upTotal, upTeam, count};
 }
 
-function suggestLoadoutsHTML(){
-  if(!ownedCards("c").length){
-    return `<div class="empty">No leveled components yet. Set some part levels on the Parts tab to build loadouts.</div>`;
-  }
-  const attrBar = `<div class="lo-attr-bar" role="group" aria-label="Optimize for">${
-    LOADOUT_ATTR_NAMES.map(n => `<button type="button" data-lattr="${esc(n)}" aria-pressed="${loadoutAttrs.has(n)}">${esc(n)}</button>`).join("")
-  }</div>`;
-
-  const strat = {t:[...loadoutAttrs]};
-  const lo = bestLoadout(strat);
+// Renders one full loadout card (aggregate stat chips, Total/Team, +1-lvl projection, all 7 parts).
+// Shared by both Loadouts modes (By Attribute and By Track) so the two stay visually identical.
+function loadoutCardHTML(title, hint, hotStats, lo){
   const aggChips = CAR_STATS.map(n => {
-    const hot = strat.t.includes(n);
+    const hot = hotStats.includes(n);
     return `<span class="lo-stat${hot?' hot':''}">${esc(n)} <b>${fmtNum(Math.round((lo.agg[n]||0)*100)/100)}</b></span>`;
   }).join("");
   const parts = lo.picks.map(p => {
@@ -1535,18 +1546,127 @@ function suggestLoadoutsHTML(){
       <span><b>${esc(p.c.name)}</b>${boost} <span class="muted">Lv ${p.c.level}</span></span></div>`;
   }).join("");
   const upT = lo.upTotal - lo.total, upM = lo.upTeam - lo.team;
-  const card = `<div class="panel lo-card">
-    <h3>${esc(strat.t.join(" + ") || "—")}<span class="hint">${lo.count}/7 parts</span></h3>
+  return `<div class="panel lo-card">
+    <h3>${esc(title)}<span class="hint">${esc(hint)}</span></h3>
     <div class="lo-aggs">${aggChips}</div>
     <div class="lo-tot">Total <b>${fmt(lo.total)}</b> · Team <b>${fmt(lo.team)}</b>
       <span class="muted">· if each part +1 lvl → ${fmt(lo.upTotal)} <span class="delta up">+${upT}</span> / ${fmt(lo.upTeam)} <span class="delta up">+${upM}</span></span></div>
     <div class="lo-parts">${parts}</div>
   </div>`;
+}
 
-  return `<div class="rt-note">Best loadout from <b>your owned components</b> for the selected attribute(s) — one
-    part per category, chosen to maximise their combined stat(s) at current levels. Tap attributes above to change
-    what's optimized for. (The workbook’s per-Series/GP picks are formula-driven off the author’s own collection, so
-    this is computed live from yours instead.)</div>${attrBar}${card}`;
+function suggestLoadoutsHTML(){
+  const modeSwitch = `<div class="cmp-scope">
+    <button data-lm="attr" aria-selected="${loadoutMode==='attr'}">By Attribute</button>
+    <button data-lm="track" aria-selected="${loadoutMode==='track'}">By Track</button>
+  </div>`;
+
+  if(loadoutMode === "track") return modeSwitch + trackSpecHTML();
+
+  if(!ownedCards("c").length){
+    return modeSwitch + `<div class="empty">No leveled components yet. Set some part levels on the Parts tab to build loadouts.</div>`;
+  }
+  const attrBar = `<div class="lo-attr-bar" role="group" aria-label="Optimize for">${
+    LOADOUT_ATTR_NAMES.map(n => `<button type="button" data-lattr="${esc(n)}" aria-pressed="${loadoutAttrs.has(n)}">${esc(n)}</button>`).join("")
+  }</div>`;
+
+  const strat = {t:[...loadoutAttrs]};
+  const lo = bestLoadout(strat);
+  const card = loadoutCardHTML(strat.t.join(" + ") || "—", `${lo.count}/7 parts`, strat.t, lo);
+
+  return modeSwitch + `<div class="rt-note">Best loadout from <b>your owned components</b> for the selected
+    attribute(s) — one part per category, chosen to maximise their combined stat(s) at current levels. Tap
+    attributes above to change what's optimized for. (The workbook’s per-Series/GP picks are formula-driven off
+    the author’s own collection, so this is computed live from yours instead.)</div>${attrBar}${card}`;
+}
+
+/* ----- 4b) Loadouts — By Track: in-game "Track Stats" spotlight one driver stat and one component
+   stat per circuit. Pick a track to see your best 2 owned drivers for its driver stat, and your best
+   owned loadout for its component stat. Transcribed by hand from in-game Track Stats screens (not
+   covered by the source workbook). Add new circuits here as they're confirmed in-game. */
+const TRACKS = [
+  {n:"Abu Dhabi",    c:"UAE",             ds:"Overtaking", cs:"Speed"},
+  {n:"Austin",       c:"USA",             ds:"Race Start", cs:"Cornering"},
+  {n:"Baku",         c:"Azerbaijan",      ds:"Tyre Mgmt",   cs:"Power Unit"},
+  {n:"Barcelona",    c:"Spain",           ds:"Tyre Mgmt",   cs:"Speed"},
+  {n:"Hungaroring",  c:"Hungary",         ds:"Overtaking", cs:"Cornering"},
+  {n:"Jeddah",       c:"Saudi Arabia",    ds:"Defending",  cs:"Speed"},
+  {n:"Las Vegas",    c:"USA",             ds:"Overtaking", cs:"Speed"},
+  {n:"Melbourne",    c:"Australia",       ds:"Race Start", cs:"Cornering"},
+  {n:"Mexico City",  c:"Mexico",          ds:"Tyre Mgmt",   cs:"Power Unit"},
+  {n:"Miami",        c:"USA",             ds:"Overtaking", cs:"Speed"},
+  {n:"Monaco",       c:"Monaco",          ds:"Defending",  cs:"Cornering"},
+  {n:"Monza",        c:"Italy",           ds:"Defending",  cs:"Speed"},
+  {n:"Montréal",     c:"Canada",          ds:"Race Start", cs:"Power Unit"},
+  {n:"Sakhir",       c:"Bahrain",         ds:"Tyre Mgmt",   cs:"Power Unit"},
+  {n:"Shanghai",     c:"China",           ds:"Defending",  cs:"Power Unit"},
+  {n:"Silverstone",  c:"United Kingdom",  ds:"Overtaking", cs:"Speed"},
+  {n:"Singapore",    c:"Singapore",       ds:"Race Start", cs:"Speed"},
+  {n:"São Paulo",    c:"Brazil",          ds:"Overtaking", cs:"Power Unit"},
+  {n:"Spielberg",    c:"Austria",         ds:"Race Start", cs:"Cornering"},
+  {n:"Suzuka",       c:"Japan",           ds:"Tyre Mgmt",   cs:"Cornering"},
+  {n:"Zandvoort",    c:"Netherlands",     ds:"Defending",  cs:"Cornering"}
+];
+// In-game wording is "Tyre Management"; DRIVER_STAT_LABELS uses "Tyre Mgmt" for lookup.
+const TRACK_DS_LABEL = {"Tyre Mgmt":"Tyre Management"};
+
+function trackSpecHTML(){
+  if(!TRACKS.some(t => t.n === loadoutTrack)) loadoutTrack = TRACKS[0].n;
+  const track = TRACKS.find(t => t.n === loadoutTrack);
+  const dsIdx = DRIVER_STAT_LABELS.indexOf(track.ds);
+  const dsLabel = TRACK_DS_LABEL[track.ds] || track.ds;
+
+  const select = `<div class="trk-select-wrap">
+    <label for="trackSel">Track</label>
+    <select class="trk-select" id="trackSel" data-trk-select>${
+      TRACKS.map(t => `<option value="${esc(t.n)}"${t.n===track.n?' selected':''}>${esc(t.n)} — ${esc(t.c)}</option>`).join("")
+    }</select>
+  </div>`;
+
+  const statChips = `<div class="panel lo-card trk-card">
+    <h3>${esc(track.n)}<span class="hint">${esc(track.c)}</span></h3>
+    <div class="lo-aggs">
+      <span class="lo-stat hot">${esc(dsLabel)}</span>
+      <span class="lo-stat hot">${esc(track.cs)}</span>
+    </div>
+  </div>`;
+
+  const drivers = ownedCards("d");
+  let driversBlock;
+  if(!drivers.length){
+    driversBlock = `<div class="empty">No leveled drivers yet. Set some driver levels on the Drivers tab.</div>`;
+  }else{
+    const ranked = drivers.map(c => {
+      const st = statsView(c.id, c.level, isBoosted(c.id));
+      const up = c.level < c.cap ? statsView(c.id, c.level + 1, isBoosted(c.id)) : null;
+      return {c, st, up};
+    }).sort((a,b) => b.st.vals[dsIdx] - a.st.vals[dsIdx]).slice(0, 2);
+    const cards = ranked.map((r, idx) => {
+      const v = r.st.vals[dsIdx];
+      const nextV = r.up ? r.up.vals[dsIdx] : null;
+      const boost = isBoosted(r.c.id) ? `<span class="tag-boost">+10%</span>` : "";
+      return `<div class="panel trk-driver-card">
+        <div class="trk-rank">Best ${esc(dsLabel)} · #${idx+1}</div>
+        <div class="trk-dname">${esc(r.c.name)}${boost}</div>
+        <div class="trk-dsub">${esc(r.c.rarity)} · Lv ${r.c.level} · Tot ${fmt(r.st.total)} / Team ${fmt(r.st.team)}</div>
+        <div class="trk-dval">${fmtNum(v)}${nextV!=null?`<span class="delta up">→${fmtNum(nextV)}</span>`:""}</div>
+      </div>`;
+    }).join("");
+    driversBlock = `<div class="trk-drivers-grid">${cards}</div>`;
+  }
+
+  let loadoutBlock;
+  if(ownedCards("c").length){
+    const lo = bestLoadout({t:[track.cs]});
+    loadoutBlock = loadoutCardHTML(`${track.cs} loadout`, `${lo.count}/7 parts`, [track.cs], lo);
+  }else{
+    loadoutBlock = `<div class="empty">No leveled components yet. Set some part levels on the Parts tab to build a loadout.</div>`;
+  }
+
+  return `<div class="rt-note">Each circuit's in-game <b>Track Stats</b> spotlight one driver stat and one
+    component stat. Pick a track to see your best 2 owned drivers for its driver stat, and your best owned
+    loadout for its component stat — both computed live from your collection.</div>
+    ${select}${statChips}${driversBlock}${loadoutBlock}`;
 }
 
 /* ----- 5) Compare: sortable side-by-side table at current levels ----- */
@@ -1610,78 +1730,6 @@ function compareHTML(q){
     column header to sort. Scroll the table sideways for more stats.</div>
     <div class="rtable"><div class="rt-scroll"><table class="rt cmp">
       <thead>${head}</thead><tbody>${body}</tbody></table></div></div>`;
-}
-
-/* ----- 6) Tracks: in-game circuit "Track Stats" reference -----
-   Each circuit's in-game Track Stats screen spotlights one driver stat and one component
-   stat — a car/driver built around those two carries an edge there. Transcribed by hand
-   from the in-game Track Stats screens (not part of the TR The Flash workbook, which
-   doesn't cover this). Add new circuits here as they're confirmed in-game. */
-const TRACKS = [
-  {n:"Abu Dhabi",    c:"UAE",             ds:"Overtaking", cs:"Speed"},
-  {n:"Austin",       c:"USA",             ds:"Race Start", cs:"Cornering"},
-  {n:"Baku",         c:"Azerbaijan",      ds:"Tyre Mgmt",   cs:"Power Unit"},
-  {n:"Barcelona",    c:"Spain",           ds:"Tyre Mgmt",   cs:"Speed"},
-  {n:"Hungaroring",  c:"Hungary",         ds:"Overtaking", cs:"Cornering"},
-  {n:"Jeddah",       c:"Saudi Arabia",    ds:"Defending",  cs:"Speed"},
-  {n:"Las Vegas",    c:"USA",             ds:"Overtaking", cs:"Speed"},
-  {n:"Melbourne",    c:"Australia",       ds:"Race Start", cs:"Cornering"},
-  {n:"Mexico City",  c:"Mexico",          ds:"Tyre Mgmt",   cs:"Power Unit"},
-  {n:"Miami",        c:"USA",             ds:"Overtaking", cs:"Speed"},
-  {n:"Monaco",       c:"Monaco",          ds:"Defending",  cs:"Cornering"},
-  {n:"Monza",        c:"Italy",           ds:"Defending",  cs:"Speed"},
-  {n:"Montréal", c:"Canada",         ds:"Race Start", cs:"Power Unit"},
-  {n:"Sakhir",       c:"Bahrain",         ds:"Tyre Mgmt",   cs:"Power Unit"},
-  {n:"Shanghai",     c:"China",           ds:"Defending",  cs:"Power Unit"},
-  {n:"Silverstone",  c:"United Kingdom",  ds:"Overtaking", cs:"Speed"},
-  {n:"Singapore",    c:"Singapore",       ds:"Race Start", cs:"Speed"},
-  {n:"São Paulo", c:"Brazil",        ds:"Overtaking", cs:"Power Unit"},
-  {n:"Spielberg",    c:"Austria",         ds:"Race Start", cs:"Cornering"},
-  {n:"Suzuka",       c:"Japan",           ds:"Tyre Mgmt",   cs:"Cornering"},
-  {n:"Zandvoort",    c:"Netherlands",     ds:"Defending",  cs:"Cornering"}
-];
-// In-game wording is "Tyre Management"; DRIVER_STAT_LABELS uses "Tyre Mgmt" for lookup.
-const TRACK_DS_LABEL = {"Tyre Mgmt":"Tyre Management"};
-
-function tracksHTML(q){
-  const tracks = TRACKS.filter(t => !q || t.n.toLowerCase().includes(q) || t.c.toLowerCase().includes(q));
-  if(!tracks.length) return `<div class="empty">No track matches “${esc(query)}”.</div>`;
-
-  const drivers = ownedCards("d");
-  const haveComponents = ownedCards("c").length > 0;
-
-  const cards = tracks.map(t => {
-    const dsIdx = DRIVER_STAT_LABELS.indexOf(t.ds);
-    let bestDriver = null;
-    for(const c of drivers){
-      const st = statsView(c.id, c.level, isBoosted(c.id));
-      const v = st.vals[dsIdx];
-      if(!bestDriver || v > bestDriver.v) bestDriver = {c, v};
-    }
-    const lo = haveComponents ? bestLoadout({t:[t.cs]}) : null;
-    const dsLabel = TRACK_DS_LABEL[t.ds] || t.ds;
-
-    return `<div class="panel lo-card trk-card">
-      <h3>${esc(t.n)}<span class="hint">${esc(t.c)}</span></h3>
-      <div class="lo-aggs">
-        <span class="lo-stat hot">${esc(dsLabel)}</span>
-        <span class="lo-stat hot">${esc(t.cs)}</span>
-      </div>
-      <div class="trk-you">
-        <span>Best ${esc(dsLabel)} driver: ${bestDriver
-          ? `<b>${esc(bestDriver.c.name)}</b> <span class="muted">${fmtNum(bestDriver.v)}</span>`
-          : `<span class="muted">— none leveled —</span>`}</span>
-        <span>Best owned ${esc(t.cs)} (7/7 loadout): ${haveComponents
-          ? `<b>${fmtNum(Math.round((lo.agg[t.cs]||0)*100)/100)}</b>`
-          : `<span class="muted">— none owned —</span>`}</span>
-      </div>
-    </div>`;
-  }).join("");
-
-  return `<div class="rt-note">Each circuit's in-game <b>Track Stats</b> spotlight one driver stat and one
-    component stat — a driver and loadout built around those two carry an edge there. Transcribed from the
-    in-game Track Stats screens (not covered by the source workbook). The "Best" lines are computed live from
-    your collection, same as Drivers/Loadouts above.</div>${cards}`;
 }
 
 /* ---------- Reward reference tables render ---------- */
@@ -1829,6 +1877,12 @@ app.addEventListener("click", (e) => {
   // Compare scope (drivers/components)
   const ck = e.target.closest("[data-ck]");
   if(ck){ if(cmpKind !== ck.dataset.ck){ cmpKind = ck.dataset.ck; cmpSort = {stat:"tot", dir:-1}; render(); } return; }
+  // Loadouts mode switch (By Attribute / By Track)
+  const lm = e.target.closest("[data-lm]");
+  if(lm){
+    if(loadoutMode !== lm.dataset.lm){ loadoutMode = lm.dataset.lm; saveLoadoutAttrs(); render(); }
+    return;
+  }
   // Suggested Loadouts attribute toggle
   const la = e.target.closest("[data-lattr]");
   if(la){
@@ -1899,6 +1953,15 @@ app.addEventListener("change", (e) => {
   if(!sel) return;
   if(sel.dataset.cb === "series") seriesFilter = sel.value;
   else if(sel.dataset.cb === "sort") sortBy = sel.value;
+  render();
+});
+
+// Loadouts "By Track" mode: track picker.
+app.addEventListener("change", (e) => {
+  const sel = e.target.closest("[data-trk-select]");
+  if(!sel) return;
+  loadoutTrack = sel.value;
+  saveLoadoutAttrs();
   render();
 });
 
