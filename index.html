@@ -418,6 +418,22 @@
   .boost-row{padding:12px}
   .boost-head{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px}
   .boost-name{font-weight:800; font-size:14.5px}
+  .boost-name .hint{font-size:11px; font-weight:600; color:var(--muted); text-transform:none; margin-left:6px}
+
+  /* New Boost form (Boosts tab) */
+  .nb-name-field{margin-bottom:10px}
+  .nb-name-field label{display:block; font-size:11px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.06em; color:var(--muted); margin-bottom:6px}
+  .nb-name-field input{width:100%; min-height:var(--tap); border:1px solid var(--line); border-radius:10px;
+    background:var(--surface-2); color:var(--text); font-weight:700; font-size:15px; padding:0 12px}
+  .nb-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px}
+  .nb-field label{display:block; font-size:10px; color:var(--muted); text-transform:uppercase;
+    letter-spacing:.05em; margin-bottom:4px}
+  .nb-field input{width:100%; text-align:right; background:var(--surface-2); color:var(--text);
+    border:1px solid var(--line); border-radius:10px; padding:9px 10px; min-height:var(--tap)}
+  .nb-add{width:100%; min-height:var(--tap); border:0; border-radius:10px; background:var(--red);
+    color:var(--red-ink); font-weight:800; font-size:14px}
+  .nb-add:active{transform:scale(.98)}
 
   /* compare */
   .cmp-scope{display:flex; gap:6px; background:var(--surface); border:1px solid var(--line);
@@ -503,6 +519,11 @@ const LOADOUT_ATTRS_SCHEMA = 1;
 // Distinct from BOOST_KEY/boostedIds above, which is the unrelated per-card "+10%" slot toggle.
 const BOOST_OWNED_KEY = "f1sheet.boostOwned.v1";
 const BOOST_OWNED_SCHEMA = 1;
+
+// User-added custom Boosts (the game keeps adding new ones faster than this app can track
+// them) — own namespaced, schema-guarded key.
+const CUSTOM_BOOSTS_KEY = "f1sheet.customBoosts.v1";
+const CUSTOM_BOOSTS_SCHEMA = 1;
 
 /* ---------- Reward & payout reference tables (from workbook "CCData",
    identical in v1.0 and v1.1) ---------- */
@@ -754,24 +775,59 @@ const BOOSTS = [{"n":"Ballast","b":{"Race Start":5,"Cornering":10,"Pit Time":5},
 // DRIVER_STAT_LABELS uses "Tyre Mgmt"; the Boosts data (like the workbook) calls it "Tyre Use".
 function boostDsKey(ds){ return ds === "Tyre Mgmt" ? "Tyre Use" : ds; }
 
-function boostsOwnedHTML(q){
-  const list = BOOSTS.filter(b => !q || b.n.toLowerCase().includes(q));
-  if(!list.length) return `<div class="empty">No boost matches “${esc(query)}”.</div>`;
-  const rows = list.map(b => {
-    const qty = boostOwned[b.n] || 0;
-    const chips = Object.entries(b.b).map(([k,v]) => `<span class="lo-stat">${esc(k)} <b>+${v}</b></span>`).join("");
-    return `<div class="panel boost-row" data-boost="${esc(b.n)}">
-      <div class="boost-head"><span class="boost-name">${esc(b.n)}</span>
-        <div class="amt"><label for="bq-${esc(b.n)}">Owned</label>
-          <input id="bq-${esc(b.n)}" type="number" inputmode="numeric" min="0" step="1" value="${qty}"
-            data-act="boostqty" aria-label="Quantity owned for ${esc(b.n)}"></div>
-      </div>
-      <div class="lo-aggs">${chips}</div>
-    </div>`;
-  }).join("");
-  return `<div class="rt-note">Set how many of each consumable Boost you currently own. Used by Loadouts → By
-    Track to suggest one for the selected circuit. These are flat, whole-race bonuses — separate from the
-    per-card “Boosted +10%” slot toggle on Drivers/Parts.</div>${rows}`;
+// Full stat vocabulary a Boost can carry, driver stats then component stats. Offered in full
+// on the New Boost form since which subset any given boost uses varies, and the game adds new
+// boosts faster than this app can track them — better to expose every stat than guess a subset.
+const BOOST_ATTR_NAMES = [
+  "Overtaking","Defending","Qualifying","Race Start","Tyre Use",
+  "Speed","Cornering","Power Unit","Pit Time","Overtake M","Impact","Duration","Recharge"
+];
+
+function boostsOwnedHTML(){
+  const all = allBoosts();
+  if(!boostPicked || !all.some(b => b.n === boostPicked)) boostPicked = all[0].n;
+  const picked = all.find(b => b.n === boostPicked);
+  const isCustom = customBoosts.some(b => b.n === picked.n);
+
+  const select = `<div class="trk-select-wrap">
+    <label for="boostSel">Boost</label>
+    <select class="trk-select" id="boostSel" data-boost-select>${
+      all.map(b => `<option value="${esc(b.n)}"${b.n===picked.n?' selected':''}>${esc(b.n)}${customBoosts.some(c=>c.n===b.n)?' (custom)':''}</option>`).join("")
+    }</select>
+  </div>`;
+
+  const qty = boostOwned[picked.n] || 0;
+  const chips = Object.entries(picked.b).map(([k,v]) => `<span class="lo-stat">${esc(k)} <b>+${v}</b></span>`).join("");
+  const card = `<div class="panel boost-row" data-boost="${esc(picked.n)}">
+    <div class="boost-head"><span class="boost-name">${esc(picked.n)}${isCustom?' <span class="hint">custom</span>':''}</span>
+      <div class="amt"><label for="bq-${esc(picked.n)}">Owned</label>
+        <input id="bq-${esc(picked.n)}" type="number" inputmode="numeric" min="0" step="1" value="${qty}"
+          data-act="boostqty" aria-label="Quantity owned for ${esc(picked.n)}"></div>
+    </div>
+    <div class="lo-aggs">${chips}</div>
+  </div>`;
+
+  const attrFields = BOOST_ATTR_NAMES.map(n => `
+    <div class="nb-field">
+      <label for="nb-${esc(n)}">${esc(n)}</label>
+      <input id="nb-${esc(n)}" type="number" inputmode="numeric" step="1" placeholder="0" data-nb-attr="${esc(n)}">
+    </div>`).join("");
+
+  const newBoostForm = `<div class="panel">
+    <h3>New Boost</h3>
+    <div class="nb-name-field">
+      <label for="nb-name">Name</label>
+      <input id="nb-name" type="text" placeholder="e.g. Nova" data-nb-name>
+    </div>
+    <div class="nb-grid">${attrFields}</div>
+    <button type="button" class="nb-add" data-nb-add>Add Boost</button>
+  </div>`;
+
+  return `<div class="rt-note">Set how many of each consumable Boost you currently own — used by Loadouts →
+    By Track to suggest one for the selected circuit. These are flat, whole-race bonuses, separate from the
+    per-card “Boosted +10%” slot toggle on Drivers/Parts. The game adds new Boosts faster than this list can
+    track — use New Boost below to add one; it shows up in the picker above and counts toward suggestions just
+    like the built-in ones.</div>${select}${card}${newBoostForm}`;
 }
 
 /* ---------- State ---------- */
@@ -790,6 +846,8 @@ let loadoutAttrs = new Set(["Speed"]); // Suggested Loadouts: selected optimizat
 let loadoutMode = "attr";          // Loadouts sub-mode: "attr" (by attribute) | "track" (by Track Spec)
 let loadoutTrack = "Abu Dhabi";    // Loadouts "By Track" mode: selected circuit name (see TRACKS below)
 let boostOwned = {};              // { boostName: quantity } — how many of each consumable Boost you own
+let customBoosts = [];            // [{n, b:{stat:val,...}}] user-added Boosts, alongside the built-in BOOSTS
+let boostPicked = null;           // Boosts tab: name of the boost currently shown in the picker
 
 function load(){
   try{
@@ -885,18 +943,42 @@ function loadBoostOwned(){
     const raw = localStorage.getItem(BOOST_OWNED_KEY);
     if(!raw) return;
     const data = JSON.parse(raw);
-    if(data && typeof data === "object" && data.schema === BOOST_OWNED_SCHEMA && data.qty){
-      boostOwned = data.qty;
+    if(data && typeof data === "object" && data.schema === BOOST_OWNED_SCHEMA){
+      if(data.qty) boostOwned = data.qty;
+      if(typeof data.picked === "string" && data.picked) boostPicked = data.picked;
     }
   }catch(e){ /* corrupt storage -> none owned */ }
 }
 function saveBoostOwned(){
   try{
     localStorage.setItem(BOOST_OWNED_KEY, JSON.stringify({
-      schema:BOOST_OWNED_SCHEMA, qty:boostOwned, savedAt:new Date().toISOString()
+      schema:BOOST_OWNED_SCHEMA, qty:boostOwned, picked:boostPicked, savedAt:new Date().toISOString()
     }));
   }catch(e){ toast("Couldn't save — storage full?"); }
 }
+
+/* ---------- Custom (user-added) Boosts ---------- */
+function loadCustomBoosts(){
+  customBoosts = [];
+  try{
+    const raw = localStorage.getItem(CUSTOM_BOOSTS_KEY);
+    if(!raw) return;
+    const data = JSON.parse(raw);
+    if(data && typeof data === "object" && data.schema === CUSTOM_BOOSTS_SCHEMA && Array.isArray(data.boosts)){
+      customBoosts = data.boosts;
+    }
+  }catch(e){ /* corrupt storage -> none custom */ }
+}
+function saveCustomBoosts(){
+  try{
+    localStorage.setItem(CUSTOM_BOOSTS_KEY, JSON.stringify({
+      schema:CUSTOM_BOOSTS_SCHEMA, boosts:customBoosts, savedAt:new Date().toISOString()
+    }));
+  }catch(e){ toast("Couldn't save — storage full?"); }
+}
+// All boosts, built-in + user-added, in one list — used everywhere a boost lookup happens
+// (the picker, and the Suggested Boost ranking) so custom entries behave identically.
+function allBoosts(){ return BOOSTS.concat(customBoosts); }
 
 /* ---------- Season computation (mirrors the workbook's CC scoring) ---------- */
 function ratio(cur, tgt){ if(!(tgt > 0)) return 0; return clamp(cur / tgt, 0, 1); }
@@ -1521,7 +1603,7 @@ function renderTools(){
   let body;
   if(toolView === "loadouts") body = suggestLoadoutsHTML();
   else if(toolView === "compare") body = compareHTML(q);
-  else if(toolView === "boosts") body = boostsOwnedHTML(q);
+  else if(toolView === "boosts") body = boostsOwnedHTML();
   else body = suggestDriversHTML(q);
   app.innerHTML = `<div class="tools">${toolNav()}${body}</div>`;
 }
@@ -1725,7 +1807,7 @@ function trackSpecHTML(){
   // Suggested Boosts: rank owned boosts (qty > 0) by the driver stat first, the component
   // stat as tiebreak — top 3.
   const dsKey = boostDsKey(track.ds);
-  const ownedBoosts = BOOSTS.filter(b => (boostOwned[b.n] || 0) > 0);
+  const ownedBoosts = allBoosts().filter(b => (boostOwned[b.n] || 0) > 0);
   let boostBlock;
   if(!ownedBoosts.length){
     boostBlock = `<div class="empty">No boosts owned yet. Set quantities on the Boosts tab.</div>`;
@@ -1999,6 +2081,32 @@ app.addEventListener("click", (e) => {
     render();
     return;
   }
+  // Boosts tab: New Boost form submit
+  const nbAdd = e.target.closest("[data-nb-add]");
+  if(nbAdd){
+    const panel = nbAdd.closest(".panel");
+    const name = panel.querySelector("[data-nb-name]").value.trim();
+    if(!name){ toast("Enter a name for the new Boost"); return; }
+    if(BOOSTS.some(b => b.n.toLowerCase() === name.toLowerCase())){
+      toast(`"${name}" is already a built-in Boost`);
+      return;
+    }
+    const b = {};
+    panel.querySelectorAll("[data-nb-attr]").forEach(inp => {
+      const v = Math.round(+inp.value || 0);
+      if(v) b[inp.dataset.nbAttr] = v;
+    });
+    if(!Object.keys(b).length){ toast("Set at least one stat value"); return; }
+    const existingIdx = customBoosts.findIndex(c => c.n.toLowerCase() === name.toLowerCase());
+    if(existingIdx >= 0) customBoosts[existingIdx] = {n:name, b};
+    else customBoosts.push({n:name, b});
+    saveCustomBoosts();
+    boostPicked = name;
+    saveBoostOwned();
+    render();
+    toast(`"${name}" added`);
+    return;
+  }
 
   const btn = e.target.closest("[data-act], [data-tool]");
   if(!btn) return;
@@ -2071,6 +2179,15 @@ app.addEventListener("change", (e) => {
   if(!sel) return;
   loadoutTrack = sel.value;
   saveLoadoutAttrs();
+  render();
+});
+
+// Boosts tab: boost picker.
+app.addEventListener("change", (e) => {
+  const sel = e.target.closest("[data-boost-select]");
+  if(!sel) return;
+  boostPicked = sel.value;
+  saveBoostOwned();
   render();
 });
 
@@ -2319,6 +2436,7 @@ loadSeason();
 loadBoosted();
 loadLoadoutAttrs();
 loadBoostOwned();
+loadCustomBoosts();
 render();
 
 // Register the service worker with a relative path (works under /<repo>/).
