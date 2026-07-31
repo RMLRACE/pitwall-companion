@@ -1,4 +1,4 @@
-# F1 Clash Resource Sheet
+# PitWall Companion
 
 An **offline-first**, phone-installable Progressive Web App (PWA) for tracking
 your **F1 Clash** driver and component **levels** and **card counts**. It turns

@@ -1,6 +1,6 @@
 {
-  "name": "F1 Clash Resource Sheet",
-  "short_name": "F1 Clash",
+  "name": "PitWall Companion",
+  "short_name": "PitWall",
   "description": "Offline tracker for F1 Clash driver and component levels and card counts.",
   "start_url": "./",
   "scope": "./",
