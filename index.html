@@ -364,6 +364,12 @@
   .lo-attr-bar button{border:1px solid var(--line); background:var(--surface); border-radius:999px;
     padding:8px 14px; min-height:var(--tap); font-weight:700; color:var(--muted); text-align:center}
   .lo-attr-bar button[aria-pressed="true"]{background:var(--red); color:var(--red-ink); border-color:var(--red)}
+
+  /* GP Event availability filter (Loadouts) */
+  .gp-filter .lo-attr-bar{margin-bottom:10px}
+  .gp-legendary-tog{display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:700;
+    color:var(--muted); min-height:32px; cursor:pointer}
+  .gp-legendary-tog input{width:18px; height:18px; accent-color:var(--gold); flex:0 0 auto}
   .lo-card{padding:12px}
   .lo-card h3{margin:0 0 8px; font-size:14px; font-weight:800; display:flex; align-items:center}
   .lo-card h3 .hint{margin-left:auto; font-size:11px; font-weight:600; color:var(--muted)}
@@ -856,6 +862,8 @@ let loadoutMode = "attr";          // Loadouts sub-mode: "attr" (by attribute) |
 let loadoutTrack = "Abu Dhabi";    // Loadouts "By Track" mode: selected circuit name (see TRACKS below)
 let trackLoadoutAttrs = new Set(["Speed"]); // By Track mode: selected loadout-only attributes (independent of loadoutAttrs)
 let trackLoadoutAttrsFor = null;   // Which track name trackLoadoutAttrs currently applies to (resets on track change)
+let gpTier = "champion";          // Loadouts GP-event availability filter: "junior"|"challenger"|"contender"|"champion"
+let gpLegendary = false;          // Loadouts GP-event filter: whether Legendary drivers are allowed (event-specific in-game)
 let boostOwned = {};              // { boostName: quantity } — how many of each consumable Boost you own
 let customBoosts = [];            // [{n, b:{stat:val,...}}] user-added Boosts, alongside the built-in BOOSTS
 let boostPicked = null;           // Boosts tab: name of the boost currently shown in the picker
@@ -937,6 +945,8 @@ function loadLoadoutAttrs(){
       if(typeof data.track === "string" && data.track) loadoutTrack = data.track;
       if(Array.isArray(data.trackAttrs) && data.trackAttrs.length) trackLoadoutAttrs = new Set(data.trackAttrs);
       if(typeof data.trackAttrsFor === "string" && data.trackAttrsFor) trackLoadoutAttrsFor = data.trackAttrsFor;
+      if(GP_TIERS.some(t => t.k === data.gpTier)) gpTier = data.gpTier;
+      if(typeof data.gpLegendary === "boolean") gpLegendary = data.gpLegendary;
     }
   }catch(e){ /* corrupt storage -> keep default */ }
 }
@@ -945,6 +955,7 @@ function saveLoadoutAttrs(){
     localStorage.setItem(LOADOUT_ATTRS_KEY, JSON.stringify({
       schema:LOADOUT_ATTRS_SCHEMA, attrs:[...loadoutAttrs], mode:loadoutMode, track:loadoutTrack,
       trackAttrs:[...trackLoadoutAttrs], trackAttrsFor:trackLoadoutAttrsFor,
+      gpTier, gpLegendary,
       savedAt:new Date().toISOString()
     }));
   }catch(e){ toast("Couldn't save — storage full?"); }
@@ -1154,6 +1165,23 @@ function statsAt(id, level){
 function dataCap(id){ const r = REF[id]; return r ? r.s.length : 0; }
 // Unlock series for a card (0/null = not via series progression, e.g. Legendary).
 function seriesOf(id){ const r = REF[id]; return r && r.sr ? r.sr : null; }
+
+/* GP Event availability (Loadouts only): in-game GP Events cap eligible assets by Series
+   depending on difficulty — Junior/Challenger/Contender/Champion — and separately gate
+   Legendary drivers behind a per-event flag regardless of tier. */
+const GP_TIERS = [
+  {k:"junior",     label:"Junior",     cap:3},
+  {k:"challenger", label:"Challenger", cap:6},
+  {k:"contender",  label:"Contender",  cap:9},
+  {k:"champion",   label:"Champion",   cap:Infinity}
+];
+function gpEligible(c){
+  if(c.rarity === "Legendary") return gpLegendary;
+  const cap = GP_TIERS.find(t => t.k === gpTier).cap;
+  if(cap === Infinity) return true;
+  const sr = seriesOf(c.id);
+  return sr != null && sr <= cap;
+}
 
 /* Boosted (+10%) transform. The workbook models a per-card "boosted" slot as a
    flat Boost % (0.10). We scale each positive stat and Total/Team by 1.10 and
@@ -1673,6 +1701,7 @@ function bestLoadout(strat){
     for(const seed of seedList("components", g)){
       const c = effective("components", g, seed);
       if(c.level < 1) continue;                       // must own it
+      if(!gpEligible(c)) continue;                     // must be usable at the selected GP tier
       const st = statsView(c.id, c.level, isBoosted(c.id));
       if(!st) continue;
       const score = strat.t.reduce((s,tn) => s + (st.vals[st.names.indexOf(tn)] || 0), 0);
@@ -1718,26 +1747,44 @@ function loadoutCardHTML(title, hint, hotStats, lo){
   </div>`;
 }
 
+// GP Event availability filter bar — shared by both Loadouts modes.
+function gpFilterBarHTML(){
+  const tierBtns = GP_TIERS.map(t =>
+    `<button type="button" data-gp-tier="${t.k}" aria-pressed="${gpTier===t.k}">${esc(t.label)}</button>`).join("");
+  return `<div class="panel gp-filter">
+    <h3>GP Event availability<span class="hint">${esc(GP_TIERS.find(t=>t.k===gpTier).label)}</span></h3>
+    <div class="lo-attr-bar">${tierBtns}</div>
+    <label class="gp-legendary-tog">
+      <input type="checkbox" data-gp-legendary ${gpLegendary?'checked':''}>
+      <span>Legendary drivers allowed</span>
+    </label>
+  </div>`;
+}
+
 function suggestLoadoutsHTML(){
   const modeSwitch = `<div class="cmp-scope">
     <button data-lm="attr" aria-selected="${loadoutMode==='attr'}">By Attribute</button>
     <button data-lm="track" aria-selected="${loadoutMode==='track'}">By Track</button>
   </div>`;
+  const gpBar = gpFilterBarHTML();
 
-  if(loadoutMode === "track") return modeSwitch + trackSpecHTML();
+  if(loadoutMode === "track") return modeSwitch + gpBar + trackSpecHTML();
 
-  if(!ownedCards("c").length){
-    return modeSwitch + `<div class="empty">No leveled components yet. Set some part levels on the Parts tab to build loadouts.</div>`;
-  }
   const attrBar = `<div class="lo-attr-bar" role="group" aria-label="Optimize for">${
     LOADOUT_ATTR_NAMES.map(n => `<button type="button" data-lattr="${esc(n)}" aria-pressed="${loadoutAttrs.has(n)}">${esc(n)}</button>`).join("")
   }</div>`;
 
   const strat = {t:[...loadoutAttrs]};
   const lo = bestLoadout(strat);
+  if(lo.count === 0){
+    const msg = ownedCards("c").length
+      ? "None of your owned components are eligible for this GP Event tier — try a higher tier."
+      : "No leveled components yet. Set some part levels on the Parts tab to build loadouts.";
+    return modeSwitch + gpBar + attrBar + `<div class="empty">${msg}</div>`;
+  }
   const card = loadoutCardHTML(strat.t.join(" + ") || "—", `${lo.count}/7 parts`, strat.t, lo);
 
-  return modeSwitch + `<div class="rt-note">Best loadout from <b>your owned components</b> for the selected
+  return modeSwitch + gpBar + `<div class="rt-note">Best loadout from <b>your owned components</b> for the selected
     attribute(s) — one part per category, chosen to maximise their combined stat(s) at current levels. Tap
     attributes above to change what's optimized for. (The workbook’s per-Series/GP picks are formula-driven off
     the author’s own collection, so this is computed live from yours instead.)</div>${attrBar}${card}`;
@@ -1804,10 +1851,12 @@ function trackSpecHTML(){
     </div>
   </div>`;
 
-  const drivers = ownedCards("d");
+  const drivers = ownedCards("d").filter(gpEligible);
   let driversBlock;
   if(!drivers.length){
-    driversBlock = `<div class="empty">No leveled drivers yet. Set some driver levels on the Drivers tab.</div>`;
+    driversBlock = `<div class="empty">${ownedCards("d").length
+      ? "None of your owned drivers are eligible for this GP Event filter — try a higher tier or allow Legendary drivers."
+      : "No leveled drivers yet. Set some driver levels on the Drivers tab."}</div>`;
   }else{
     const ranked = drivers.map(c => {
       const st = statsView(c.id, c.level, isBoosted(c.id));
@@ -1859,13 +1908,15 @@ function trackSpecHTML(){
     LOADOUT_ATTR_NAMES.map(n => `<button type="button" data-tlattr="${esc(n)}" aria-pressed="${trackLoadoutAttrs.has(n)}">${esc(n)}</button>`).join("")
   }</div>`;
 
+  const trackStrat = {t:[...trackLoadoutAttrs]};
+  const trackLo = bestLoadout(trackStrat);
   let loadoutBlock;
-  if(ownedCards("c").length){
-    const trackStrat = {t:[...trackLoadoutAttrs]};
-    const lo = bestLoadout(trackStrat);
-    loadoutBlock = loadoutCardHTML(trackStrat.t.join(" + ") || "—", `${lo.count}/7 parts`, trackStrat.t, lo);
+  if(trackLo.count > 0){
+    loadoutBlock = loadoutCardHTML(trackStrat.t.join(" + ") || "—", `${trackLo.count}/7 parts`, trackStrat.t, trackLo);
   }else{
-    loadoutBlock = `<div class="empty">No leveled components yet. Set some part levels on the Parts tab to build a loadout.</div>`;
+    loadoutBlock = `<div class="empty">${ownedCards("c").length
+      ? "None of your owned components are eligible for this GP Event tier — try a higher tier."
+      : "No leveled components yet. Set some part levels on the Parts tab to build a loadout."}</div>`;
   }
 
   return `<div class="rt-note">Each circuit's in-game <b>Track Stats</b> spotlight one driver stat and one
@@ -2116,6 +2167,12 @@ app.addEventListener("click", (e) => {
     render();
     return;
   }
+  // Loadouts: GP Event tier
+  const gpt = e.target.closest("[data-gp-tier]");
+  if(gpt){
+    if(gpTier !== gpt.dataset.gpTier){ gpTier = gpt.dataset.gpTier; saveLoadoutAttrs(); render(); }
+    return;
+  }
   // Compare column sort
   const cs = e.target.closest("[data-cs]");
   if(cs){
@@ -2222,6 +2279,15 @@ app.addEventListener("change", (e) => {
   const sel = e.target.closest("[data-trk-select]");
   if(!sel) return;
   loadoutTrack = sel.value;
+  saveLoadoutAttrs();
+  render();
+});
+
+// Loadouts: GP Event "Legendary drivers allowed" toggle.
+app.addEventListener("change", (e) => {
+  const cb = e.target.closest("[data-gp-legendary]");
+  if(!cb) return;
+  gpLegendary = cb.checked;
   saveLoadoutAttrs();
   render();
 });
