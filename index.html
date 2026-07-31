@@ -845,6 +845,8 @@ let boostedIds = {};       // { id: true } cards toggled to +10% boosted
 let loadoutAttrs = new Set(["Speed"]); // Suggested Loadouts: selected optimization attributes
 let loadoutMode = "attr";          // Loadouts sub-mode: "attr" (by attribute) | "track" (by Track Spec)
 let loadoutTrack = "Abu Dhabi";    // Loadouts "By Track" mode: selected circuit name (see TRACKS below)
+let trackLoadoutAttrs = new Set(["Speed"]); // By Track mode: selected loadout-only attributes (independent of loadoutAttrs)
+let trackLoadoutAttrsFor = null;   // Which track name trackLoadoutAttrs currently applies to (resets on track change)
 let boostOwned = {};              // { boostName: quantity } — how many of each consumable Boost you own
 let customBoosts = [];            // [{n, b:{stat:val,...}}] user-added Boosts, alongside the built-in BOOSTS
 let boostPicked = null;           // Boosts tab: name of the boost currently shown in the picker
@@ -924,6 +926,8 @@ function loadLoadoutAttrs(){
       if(Array.isArray(data.attrs) && data.attrs.length) loadoutAttrs = new Set(data.attrs);
       if(data.mode === "attr" || data.mode === "track") loadoutMode = data.mode;
       if(typeof data.track === "string" && data.track) loadoutTrack = data.track;
+      if(Array.isArray(data.trackAttrs) && data.trackAttrs.length) trackLoadoutAttrs = new Set(data.trackAttrs);
+      if(typeof data.trackAttrsFor === "string" && data.trackAttrsFor) trackLoadoutAttrsFor = data.trackAttrsFor;
     }
   }catch(e){ /* corrupt storage -> keep default */ }
 }
@@ -931,6 +935,7 @@ function saveLoadoutAttrs(){
   try{
     localStorage.setItem(LOADOUT_ATTRS_KEY, JSON.stringify({
       schema:LOADOUT_ATTRS_SCHEMA, attrs:[...loadoutAttrs], mode:loadoutMode, track:loadoutTrack,
+      trackAttrs:[...trackLoadoutAttrs], trackAttrsFor:trackLoadoutAttrsFor,
       savedAt:new Date().toISOString()
     }));
   }catch(e){ toast("Couldn't save — storage full?"); }
@@ -1765,6 +1770,16 @@ function trackSpecHTML(){
   const dsIdx = DRIVER_STAT_LABELS.indexOf(track.ds);
   const dsLabel = TRACK_DS_LABEL[track.ds] || track.ds;
 
+  // The loadout's attribute selection is per-track: switching tracks resets it back to
+  // that track's own component stat, but it can be customized from there independently
+  // of the By Attribute mode's selection (and independently of the driver ranking /
+  // Suggested Boost above, which always stay tied to the track's official stats).
+  if(trackLoadoutAttrsFor !== track.n){
+    trackLoadoutAttrs = new Set([track.cs]);
+    trackLoadoutAttrsFor = track.n;
+    saveLoadoutAttrs();
+  }
+
   const select = `<div class="trk-select-wrap">
     <label for="trackSel">Track</label>
     <select class="trk-select" id="trackSel" data-trk-select>${
@@ -1831,18 +1846,25 @@ function trackSpecHTML(){
     boostBlock = `<div class="panel"><h3>Suggested Boost<span class="hint">top ${ranked.length}</span></h3>${rows}</div>`;
   }
 
+  const trackAttrBar = `<div class="lo-attr-bar" role="group" aria-label="Optimize loadout for">${
+    LOADOUT_ATTR_NAMES.map(n => `<button type="button" data-tlattr="${esc(n)}" aria-pressed="${trackLoadoutAttrs.has(n)}">${esc(n)}</button>`).join("")
+  }</div>`;
+
   let loadoutBlock;
   if(ownedCards("c").length){
-    const lo = bestLoadout({t:[track.cs]});
-    loadoutBlock = loadoutCardHTML(`${track.cs} loadout`, `${lo.count}/7 parts`, [track.cs], lo);
+    const trackStrat = {t:[...trackLoadoutAttrs]};
+    const lo = bestLoadout(trackStrat);
+    loadoutBlock = loadoutCardHTML(trackStrat.t.join(" + ") || "—", `${lo.count}/7 parts`, trackStrat.t, lo);
   }else{
     loadoutBlock = `<div class="empty">No leveled components yet. Set some part levels on the Parts tab to build a loadout.</div>`;
   }
 
   return `<div class="rt-note">Each circuit's in-game <b>Track Stats</b> spotlight one driver stat and one
     component stat. Pick a track to see your best 2 owned drivers for its driver stat, your best owned loadout
-    for its component stat, and a suggested consumable Boost — all computed live from your collection.</div>
-    ${select}${statChips}${driversBlock}${boostBlock}${loadoutBlock}`;
+    for its component stat, and a suggested consumable Boost — all computed live from your collection. The
+    loadout below starts on the track's own stat but can be customized like Loadouts → By Attribute — the
+    driver ranking and Suggested Boost above always stay tied to the track's official stats.</div>
+    ${select}${statChips}${driversBlock}${boostBlock}${trackAttrBar}${loadoutBlock}`;
 }
 
 /* ----- 5) Compare: sortable side-by-side table at current levels ----- */
@@ -2067,6 +2089,19 @@ app.addEventListener("click", (e) => {
       if(loadoutAttrs.size > 1) loadoutAttrs.delete(name); // keep at least one selected
     }else{
       loadoutAttrs.add(name);
+    }
+    saveLoadoutAttrs();
+    render();
+    return;
+  }
+  // Loadouts By Track: per-track loadout attribute toggle
+  const tla = e.target.closest("[data-tlattr]");
+  if(tla){
+    const name = tla.dataset.tlattr;
+    if(trackLoadoutAttrs.has(name)){
+      if(trackLoadoutAttrs.size > 1) trackLoadoutAttrs.delete(name); // keep at least one selected
+    }else{
+      trackLoadoutAttrs.add(name);
     }
     saveLoadoutAttrs();
     render();
