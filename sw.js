@@ -1,4 +1,4 @@
-/* F1 Clash Resource Sheet - service worker
+/* PitWall Companion - service worker
  * Precache everything needed to run offline, cache-first with an
  * index.html network fallback. Bump CACHE_VERSION whenever a cached
  * file changes so clients pick up the new assets. */
