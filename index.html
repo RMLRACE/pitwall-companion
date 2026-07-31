@@ -1929,8 +1929,17 @@ function trackSpecHTML(){
 }
 
 /* ----- 5) Compare: sortable side-by-side table at current levels ----- */
+const BOOST_SHORT_LABELS = ["Over","Def","Qual","Start","Tyre","Spd","Cor","PU","Pit","OvM","Imp","Dur","Rch"];
+
 function compareHTML(q){
   const kind = cmpKind;
+  const scope = `<div class="cmp-scope">
+    <button data-ck="d" aria-selected="${kind==='d'}">Drivers</button>
+    <button data-ck="c" aria-selected="${kind==='c'}">Components</button>
+    <button data-ck="b" aria-selected="${kind==='b'}">Boosts</button>
+  </div>`;
+  if(kind === "b") return scope + compareBoostsHTML(q);
+
   const cards = ownedCards(kind).filter(c => !q || c.name.toLowerCase().includes(q));
   const statNames = kind === "d"
     ? ["overtaking","defending","qualifying","raceStart","tyreUse"]
@@ -1938,11 +1947,6 @@ function compareHTML(q){
   const shortLabels = kind === "d"
     ? ["Over","Def","Qual","Start","Tyre"]
     : ["Spd","Cor","PU","Qual","Pit","OvM","Imp","Dur","Rch"];
-
-  const scope = `<div class="cmp-scope">
-    <button data-ck="d" aria-selected="${kind==='d'}">Drivers</button>
-    <button data-ck="c" aria-selected="${kind==='c'}">Components</button>
-  </div>`;
 
   if(!cards.length){
     return scope + `<div class="empty">No leveled ${kind==='d'?'drivers':'components'}${q?" match your search":""} to compare.</div>`;
@@ -1987,6 +1991,53 @@ function compareHTML(q){
 
   return scope + `<div class="rt-note">Your ${kind==='d'?'drivers':'components'} at their current levels. Tap any
     column header to sort. Scroll the table sideways for more stats.</div>
+    <div class="rtable"><div class="rt-scroll"><table class="rt cmp">
+      <thead>${head}</thead><tbody>${body}</tbody></table></div></div>`;
+}
+
+function compareBoostsHTML(q){
+  const owned = allBoosts()
+    .filter(b => (boostOwned[b.n] || 0) > 0)
+    .filter(b => !q || b.n.toLowerCase().includes(q));
+
+  if(!owned.length){
+    return `<div class="empty">No owned Boosts${q?" match your search":""} to compare — set quantities on the Boosts tab.</div>`;
+  }
+
+  const rows = owned.map(b => ({
+    b, qty: boostOwned[b.n] || 0,
+    vals: BOOST_ATTR_NAMES.map(n => b.b[n] || 0),
+    total: Object.values(b.b).reduce((a,v) => a+v, 0)
+  }));
+
+  const s = cmpSort;
+  rows.sort((a,b) => {
+    let av, bv;
+    if(s.stat === "name") return s.dir * a.b.n.localeCompare(b.b.n);
+    if(s.stat === "qty"){ av=a.qty; bv=b.qty; }
+    else if(s.stat === "tot"){ av=a.total; bv=b.total; }
+    else { const i=+s.stat.slice(1); av=a.vals[i]; bv=b.vals[i]; }
+    return s.dir * (av - bv) || a.b.n.localeCompare(b.b.n);
+  });
+
+  const arrow = (key) => s.stat === key ? (s.dir < 0 ? " ▾" : " ▴") : "";
+  const th = (key, label, cls) =>
+    `<th class="${cls||''} sortable${s.stat===key?' active':''}" data-cs="${key}">${label}${arrow(key)}</th>`;
+  const head = `<tr>
+    ${th("name","Name")}
+    ${th("qty","Qty","num")}
+    ${BOOST_ATTR_NAMES.map((n,i)=>th("s"+i, BOOST_SHORT_LABELS[i], "num")).join("")}
+    ${th("tot","Tot","num")}
+  </tr>`;
+  const body = rows.map(r => `<tr>
+    <td class="cmp-name">${esc(r.b.n)}${customBoosts.some(c=>c.n===r.b.n)?' <span class="hint">custom</span>':''}</td>
+    <td class="num">${r.qty}</td>
+    ${r.vals.map(v=>`<td class="num">${v ? "+"+fmtNum(v) : "—"}</td>`).join("")}
+    <td class="num b">${fmt(r.total)}</td>
+  </tr>`).join("");
+
+  return `<div class="rt-note">Your owned consumable Boosts. Tap any column header to sort. Scroll the table
+    sideways for more stats.</div>
     <div class="rtable"><div class="rt-scroll"><table class="rt cmp">
       <thead>${head}</thead><tbody>${body}</tbody></table></div></div>`;
 }
