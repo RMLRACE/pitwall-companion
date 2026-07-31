@@ -62,12 +62,12 @@ stored.
   current level, with rarity, level, Total / Team Score and the *→ next level*
   value. Cards you've flagged **Boosted +10%** are ranked with their boosted
   numbers.
-- **Loadouts** — the best loadout from **your owned components** for each of
-  nine strategies (Speed, Speed + Qualifying, Cornering, Cornering + Qualifying,
-  Power Unit, Power Unit + Qualifying, Speed + Cornering,
-  Speed + Cornering + Qualifying, Qualifying): one part per category chosen to
-  maximise the strategy's stat(s), with the resulting aggregate stats, Total /
-  Team Score, and an *if each part +1 level* projection.
+- **Loadouts** — tap any combination of attribute buttons (Speed, Cornering,
+  Power Unit, Qualifying) to pick what to optimize for; one loadout card shows
+  the best pick from **your owned components** for that combination — one part
+  per category chosen to maximise the selected stat(s), with the resulting
+  aggregate stats, Total / Team Score, and an *if each part +1 level*
+  projection. Your attribute selection is remembered across visits.
 - **Compare** — a sortable, side-by-side stat table of your drivers or your
   components at their current levels. Tap any column header to sort; the wide
   component table scrolls inside its own container.
@@ -200,8 +200,9 @@ go offline and it keeps working.
   Loadouts* sheet is a large, formula-driven grid whose picks depend on the
   author's own owned components (mostly starter parts in the shared snapshot).
   Rather than embed those stale, author-specific values, the Tools → Loadouts
-  view recomputes the best loadout **from your owned components** for each
-  strategy — the same intent, kept live and useful as you level up.
+  view recomputes the best loadout **from your owned components** live for
+  whichever attributes you toggle on — the same intent, kept live and useful
+  as you level up.
 
 Use **Export** to save a JSON backup and **Import** to restore it on another
 device or after clearing browser data.
