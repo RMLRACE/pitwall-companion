@@ -359,6 +359,10 @@
   .boost-tog input{width:18px; height:18px; accent-color:var(--gold)}
 
   /* suggested loadouts */
+  .lo-attr-bar{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px}
+  .lo-attr-bar button{border:1px solid var(--line); background:var(--surface); border-radius:999px;
+    padding:8px 14px; min-height:var(--tap); font-weight:700; color:var(--muted)}
+  .lo-attr-bar button[aria-pressed="true"]{background:var(--red); color:var(--red-ink); border-color:var(--red)}
   .lo-card{padding:12px}
   .lo-card h3{margin:0 0 8px; font-size:14px; font-weight:800; display:flex; align-items:center}
   .lo-card h3 .hint{margin-left:auto; font-size:11px; font-weight:600; color:var(--muted)}
@@ -455,6 +459,10 @@ const SEASON_SCHEMA = 1;
 const BOOST_KEY = "f1sheet.boosted.v1";
 const BOOST_SCHEMA = 1;
 const BOOST_PCT = 0.10;    // global "Boost %" from the workbook Data Input sheet
+
+// Suggested-Loadouts attribute picker — own namespaced, schema-guarded key.
+const LOADOUT_ATTRS_KEY = "f1sheet.loadoutAttrs.v1";
+const LOADOUT_ATTRS_SCHEMA = 1;
 
 /* ---------- Reward & payout reference tables (from workbook "CCData",
    identical in v1.0 and v1.1) ---------- */
@@ -716,6 +724,7 @@ let toolView = "drivers";  // Tools tab sub-view: "drivers" | "loadouts" | "comp
 let cmpKind = "d";         // Compare scope: "d" drivers | "c" components
 let cmpSort = {stat:"tot", dir:-1}; // Compare active sort
 let boostedIds = {};       // { id: true } cards toggled to +10% boosted
+let loadoutAttrs = new Set(["Speed"]); // Suggested Loadouts: selected optimization attributes
 
 function load(){
   try{
@@ -780,6 +789,25 @@ function isBoosted(id){ return !!boostedIds[id]; }
 function setBoosted(id, on){
   if(on) boostedIds[id] = true; else delete boostedIds[id];
   saveBoosted();
+}
+
+/* ---------- Suggested Loadouts: selected attribute toggles ---------- */
+function loadLoadoutAttrs(){
+  try{
+    const raw = localStorage.getItem(LOADOUT_ATTRS_KEY);
+    if(!raw) return;
+    const data = JSON.parse(raw);
+    if(data && typeof data === "object" && data.schema === LOADOUT_ATTRS_SCHEMA && Array.isArray(data.attrs) && data.attrs.length){
+      loadoutAttrs = new Set(data.attrs);
+    }
+  }catch(e){ /* corrupt storage -> keep default */ }
+}
+function saveLoadoutAttrs(){
+  try{
+    localStorage.setItem(LOADOUT_ATTRS_KEY, JSON.stringify({
+      schema:LOADOUT_ATTRS_SCHEMA, attrs:[...loadoutAttrs], savedAt:new Date().toISOString()
+    }));
+  }catch(e){ toast("Couldn't save — storage full?"); }
 }
 
 /* ---------- Season computation (mirrors the workbook's CC scoring) ---------- */
@@ -1403,7 +1431,7 @@ function toolNav(){
 function renderTools(){
   const q = query.trim().toLowerCase();
   let body;
-  if(toolView === "loadouts") body = suggestLoadoutsHTML(q);
+  if(toolView === "loadouts") body = suggestLoadoutsHTML();
   else if(toolView === "compare") body = compareHTML(q);
   else body = suggestDriversHTML(q);
   app.innerHTML = `<div class="tools">${toolNav()}${body}</div>`;
@@ -1445,18 +1473,10 @@ function suggestDriversHTML(q){
     driver card to see its boosted numbers ranked here.</div>${panels}`;
 }
 
-/* ----- 4) Suggested Loadouts: best owned component per category, per strategy ----- */
-const LOADOUT_STRATS = [
-  {n:"Speed",                        t:["Speed"]},
-  {n:"Speed + Qualifying",           t:["Speed","Qualifying"]},
-  {n:"Cornering",                    t:["Cornering"]},
-  {n:"Cornering + Qualifying",       t:["Cornering","Qualifying"]},
-  {n:"Power Unit",                   t:["Power Unit"]},
-  {n:"Power Unit + Qualifying",      t:["Power Unit","Qualifying"]},
-  {n:"Speed + Cornering",            t:["Speed","Cornering"]},
-  {n:"Speed + Cornering + Qualifying", t:["Speed","Cornering","Qualifying"]},
-  {n:"Qualifying",                   t:["Qualifying"]}
-];
+/* ----- 4) Suggested Loadouts: best owned component per category, for the selected attribute(s) ----- */
+// Attributes selectable via the toggle buttons (optimization targets — Pit Time is excluded
+// since it's a "lower is better" stat, shown for info only, never something to maximise for).
+const LOADOUT_ATTR_NAMES = ["Speed","Cornering","Power Unit","Qualifying"];
 // Aggregate stat labels shown for a loadout (component stats, in sheet order).
 const CAR_STATS = ["Speed","Cornering","Power Unit","Qualifying","Pit Time"];
 
@@ -1490,36 +1510,39 @@ function bestLoadout(strat){
   return {picks, agg, total, team, upTotal, upTeam, count};
 }
 
-function suggestLoadoutsHTML(q){
-  const strats = LOADOUT_STRATS.filter(s => !q || s.n.toLowerCase().includes(q));
+function suggestLoadoutsHTML(){
   if(!ownedCards("c").length){
     return `<div class="empty">No leveled components yet. Set some part levels on the Parts tab to build loadouts.</div>`;
   }
-  if(!strats.length) return `<div class="empty">No strategy matches “${esc(query)}”.</div>`;
-  const cards = strats.map(strat => {
-    const lo = bestLoadout(strat);
-    const aggChips = CAR_STATS.map(n => {
-      const hot = strat.t.includes(n);
-      return `<span class="lo-stat${hot?' hot':''}">${esc(n)} <b>${fmtNum(Math.round((lo.agg[n]||0)*100)/100)}</b></span>`;
-    }).join("");
-    const parts = lo.picks.map(p => {
-      if(!p.c) return `<div class="lo-part empty"><span>${esc(p.group)}</span><span class="muted">— none owned —</span></div>`;
-      const boost = isBoosted(p.c.id) ? `<span class="tag-boost">+10%</span>` : "";
-      return `<div class="lo-part"><span>${esc(p.group)}</span>
-        <span><b>${esc(p.c.name)}</b>${boost} <span class="muted">Lv ${p.c.level}</span></span></div>`;
-    }).join("");
-    const upT = lo.upTotal - lo.total, upM = lo.upTeam - lo.team;
-    return `<div class="panel lo-card">
-      <h3>${esc(strat.n)}<span class="hint">${lo.count}/7 parts</span></h3>
-      <div class="lo-aggs">${aggChips}</div>
-      <div class="lo-tot">Total <b>${fmt(lo.total)}</b> · Team <b>${fmt(lo.team)}</b>
-        <span class="muted">· if each part +1 lvl → ${fmt(lo.upTotal)} <span class="delta up">+${upT}</span> / ${fmt(lo.upTeam)} <span class="delta up">+${upM}</span></span></div>
-      <div class="lo-parts">${parts}</div>
-    </div>`;
+  const attrBar = `<div class="lo-attr-bar" role="group" aria-label="Optimize for">${
+    LOADOUT_ATTR_NAMES.map(n => `<button type="button" data-lattr="${esc(n)}" aria-pressed="${loadoutAttrs.has(n)}">${esc(n)}</button>`).join("")
+  }</div>`;
+
+  const strat = {t:[...loadoutAttrs]};
+  const lo = bestLoadout(strat);
+  const aggChips = CAR_STATS.map(n => {
+    const hot = strat.t.includes(n);
+    return `<span class="lo-stat${hot?' hot':''}">${esc(n)} <b>${fmtNum(Math.round((lo.agg[n]||0)*100)/100)}</b></span>`;
   }).join("");
-  return `<div class="rt-note">Best loadout from <b>your owned components</b> for each strategy — one part per
-    category, chosen to maximise the strategy’s stat(s) at current levels. (The workbook’s per-Series/GP picks are
-    formula-driven off the author’s own collection, so these are computed live from yours instead.)</div>${cards}`;
+  const parts = lo.picks.map(p => {
+    if(!p.c) return `<div class="lo-part empty"><span>${esc(p.group)}</span><span class="muted">— none owned —</span></div>`;
+    const boost = isBoosted(p.c.id) ? `<span class="tag-boost">+10%</span>` : "";
+    return `<div class="lo-part"><span>${esc(p.group)}</span>
+      <span><b>${esc(p.c.name)}</b>${boost} <span class="muted">Lv ${p.c.level}</span></span></div>`;
+  }).join("");
+  const upT = lo.upTotal - lo.total, upM = lo.upTeam - lo.team;
+  const card = `<div class="panel lo-card">
+    <h3>${esc(strat.t.join(" + ") || "—")}<span class="hint">${lo.count}/7 parts</span></h3>
+    <div class="lo-aggs">${aggChips}</div>
+    <div class="lo-tot">Total <b>${fmt(lo.total)}</b> · Team <b>${fmt(lo.team)}</b>
+      <span class="muted">· if each part +1 lvl → ${fmt(lo.upTotal)} <span class="delta up">+${upT}</span> / ${fmt(lo.upTeam)} <span class="delta up">+${upM}</span></span></div>
+    <div class="lo-parts">${parts}</div>
+  </div>`;
+
+  return `<div class="rt-note">Best loadout from <b>your owned components</b> for the selected attribute(s) — one
+    part per category, chosen to maximise their combined stat(s) at current levels. Tap attributes above to change
+    what's optimized for. (The workbook’s per-Series/GP picks are formula-driven off the author’s own collection, so
+    this is computed live from yours instead.)</div>${attrBar}${card}`;
 }
 
 /* ----- 5) Compare: sortable side-by-side table at current levels ----- */
@@ -1730,6 +1753,19 @@ app.addEventListener("click", (e) => {
   // Compare scope (drivers/components)
   const ck = e.target.closest("[data-ck]");
   if(ck){ if(cmpKind !== ck.dataset.ck){ cmpKind = ck.dataset.ck; cmpSort = {stat:"tot", dir:-1}; render(); } return; }
+  // Suggested Loadouts attribute toggle
+  const la = e.target.closest("[data-lattr]");
+  if(la){
+    const name = la.dataset.lattr;
+    if(loadoutAttrs.has(name)){
+      if(loadoutAttrs.size > 1) loadoutAttrs.delete(name); // keep at least one selected
+    }else{
+      loadoutAttrs.add(name);
+    }
+    saveLoadoutAttrs();
+    render();
+    return;
+  }
   // Compare column sort
   const cs = e.target.closest("[data-cs]");
   if(cs){
@@ -2033,6 +2069,7 @@ function fmtCoins(n){
 load();
 loadSeason();
 loadBoosted();
+loadLoadoutAttrs();
 render();
 
 // Register the service worker with a relative path (works under /<repo>/).
