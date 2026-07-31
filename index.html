@@ -383,6 +383,10 @@
   .lo-part>span:last-child{text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   .lo-part.empty{opacity:.6}
 
+  /* tracks */
+  .trk-you{display:flex; flex-direction:column; gap:5px; margin-top:10px; font-size:12.5px; color:var(--muted)}
+  .trk-you b{color:var(--text)}
+
   /* compare */
   .cmp-scope{display:flex; gap:6px; background:var(--surface); border:1px solid var(--line);
     border-radius:12px; padding:4px; margin-bottom:10px}
@@ -1422,7 +1426,7 @@ function ownedCards(kind){
 }
 
 function toolNav(){
-  const items = [["drivers","Drivers"],["loadouts","Loadouts"],["compare","Compare"]];
+  const items = [["drivers","Drivers"],["loadouts","Loadouts"],["compare","Compare"],["tracks","Tracks"]];
   return `<div class="subnav" role="tablist" aria-label="Tools view">` + items.map(([k,l]) =>
     `<button role="tab" data-tv="${k}" aria-selected="${k===toolView}">${l}</button>`).join("") + `</div>`;
 }
@@ -1432,6 +1436,7 @@ function renderTools(){
   let body;
   if(toolView === "loadouts") body = suggestLoadoutsHTML();
   else if(toolView === "compare") body = compareHTML(q);
+  else if(toolView === "tracks") body = tracksHTML(q);
   else body = suggestDriversHTML(q);
   app.innerHTML = `<div class="tools">${toolNav()}${body}</div>`;
 }
@@ -1605,6 +1610,78 @@ function compareHTML(q){
     column header to sort. Scroll the table sideways for more stats.</div>
     <div class="rtable"><div class="rt-scroll"><table class="rt cmp">
       <thead>${head}</thead><tbody>${body}</tbody></table></div></div>`;
+}
+
+/* ----- 6) Tracks: in-game circuit "Track Stats" reference -----
+   Each circuit's in-game Track Stats screen spotlights one driver stat and one component
+   stat — a car/driver built around those two carries an edge there. Transcribed by hand
+   from the in-game Track Stats screens (not part of the TR The Flash workbook, which
+   doesn't cover this). Add new circuits here as they're confirmed in-game. */
+const TRACKS = [
+  {n:"Abu Dhabi",    c:"UAE",             ds:"Overtaking", cs:"Speed"},
+  {n:"Austin",       c:"USA",             ds:"Race Start", cs:"Cornering"},
+  {n:"Baku",         c:"Azerbaijan",      ds:"Tyre Mgmt",   cs:"Power Unit"},
+  {n:"Barcelona",    c:"Spain",           ds:"Tyre Mgmt",   cs:"Speed"},
+  {n:"Hungaroring",  c:"Hungary",         ds:"Overtaking", cs:"Cornering"},
+  {n:"Jeddah",       c:"Saudi Arabia",    ds:"Defending",  cs:"Speed"},
+  {n:"Las Vegas",    c:"USA",             ds:"Overtaking", cs:"Speed"},
+  {n:"Melbourne",    c:"Australia",       ds:"Race Start", cs:"Cornering"},
+  {n:"Mexico City",  c:"Mexico",          ds:"Tyre Mgmt",   cs:"Power Unit"},
+  {n:"Miami",        c:"USA",             ds:"Overtaking", cs:"Speed"},
+  {n:"Monaco",       c:"Monaco",          ds:"Defending",  cs:"Cornering"},
+  {n:"Monza",        c:"Italy",           ds:"Defending",  cs:"Speed"},
+  {n:"Montréal", c:"Canada",         ds:"Race Start", cs:"Power Unit"},
+  {n:"Sakhir",       c:"Bahrain",         ds:"Tyre Mgmt",   cs:"Power Unit"},
+  {n:"Shanghai",     c:"China",           ds:"Defending",  cs:"Power Unit"},
+  {n:"Silverstone",  c:"United Kingdom",  ds:"Overtaking", cs:"Speed"},
+  {n:"Singapore",    c:"Singapore",       ds:"Race Start", cs:"Speed"},
+  {n:"São Paulo", c:"Brazil",        ds:"Overtaking", cs:"Power Unit"},
+  {n:"Spielberg",    c:"Austria",         ds:"Race Start", cs:"Cornering"},
+  {n:"Suzuka",       c:"Japan",           ds:"Tyre Mgmt",   cs:"Cornering"},
+  {n:"Zandvoort",    c:"Netherlands",     ds:"Defending",  cs:"Cornering"}
+];
+// In-game wording is "Tyre Management"; DRIVER_STAT_LABELS uses "Tyre Mgmt" for lookup.
+const TRACK_DS_LABEL = {"Tyre Mgmt":"Tyre Management"};
+
+function tracksHTML(q){
+  const tracks = TRACKS.filter(t => !q || t.n.toLowerCase().includes(q) || t.c.toLowerCase().includes(q));
+  if(!tracks.length) return `<div class="empty">No track matches “${esc(query)}”.</div>`;
+
+  const drivers = ownedCards("d");
+  const haveComponents = ownedCards("c").length > 0;
+
+  const cards = tracks.map(t => {
+    const dsIdx = DRIVER_STAT_LABELS.indexOf(t.ds);
+    let bestDriver = null;
+    for(const c of drivers){
+      const st = statsView(c.id, c.level, isBoosted(c.id));
+      const v = st.vals[dsIdx];
+      if(!bestDriver || v > bestDriver.v) bestDriver = {c, v};
+    }
+    const lo = haveComponents ? bestLoadout({t:[t.cs]}) : null;
+    const dsLabel = TRACK_DS_LABEL[t.ds] || t.ds;
+
+    return `<div class="panel lo-card trk-card">
+      <h3>${esc(t.n)}<span class="hint">${esc(t.c)}</span></h3>
+      <div class="lo-aggs">
+        <span class="lo-stat hot">${esc(dsLabel)}</span>
+        <span class="lo-stat hot">${esc(t.cs)}</span>
+      </div>
+      <div class="trk-you">
+        <span>Best ${esc(dsLabel)} driver: ${bestDriver
+          ? `<b>${esc(bestDriver.c.name)}</b> <span class="muted">${fmtNum(bestDriver.v)}</span>`
+          : `<span class="muted">— none leveled —</span>`}</span>
+        <span>Best owned ${esc(t.cs)} (7/7 loadout): ${haveComponents
+          ? `<b>${fmtNum(Math.round((lo.agg[t.cs]||0)*100)/100)}</b>`
+          : `<span class="muted">— none owned —</span>`}</span>
+      </div>
+    </div>`;
+  }).join("");
+
+  return `<div class="rt-note">Each circuit's in-game <b>Track Stats</b> spotlight one driver stat and one
+    component stat — a driver and loadout built around those two carry an edge there. Transcribed from the
+    in-game Track Stats screens (not covered by the source workbook). The "Best" lines are computed live from
+    your collection, same as Drivers/Loadouts above.</div>${cards}`;
 }
 
 /* ---------- Reward reference tables render ---------- */
