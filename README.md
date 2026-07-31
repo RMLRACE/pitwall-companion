@@ -54,23 +54,43 @@ living tracker you can update on the go.
 
 ### Tools tab (coach)
 
-Everything here is **computed live** from your current card levels — nothing is
-stored.
+Suggested Drivers, Loadouts, and Compare are all **computed live** from your
+current card levels — nothing stored beyond your Loadouts preferences. The
+Boosts tab is the one exception: quantities you enter there (and any Boosts
+you add) are stored, since there's no other source for that data.
 
 - **Suggested Drivers** — for each attribute (Overtaking, Defending, Qualifying,
   Race Start, Tyre Mgmt) your best-owned drivers ranked by that stat at their
   current level, with rarity, level, Total / Team Score and the *→ next level*
   value. Cards you've flagged **Boosted +10%** are ranked with their boosted
   numbers.
-- **Loadouts** — tap any combination of attribute buttons (Speed, Cornering,
-  Power Unit, Qualifying) to pick what to optimize for; one loadout card shows
-  the best pick from **your owned components** for that combination — one part
-  per category chosen to maximise the selected stat(s), with the resulting
-  aggregate stats, Total / Team Score, and an *if each part +1 level*
-  projection. Your attribute selection is remembered across visits.
+- **Loadouts** — two modes, switchable at the top of the tab:
+  - **By Attribute** — tap any combination of attribute buttons (Speed,
+    Cornering, Power Unit, Qualifying) to pick what to optimize for; one
+    loadout card shows the best pick from **your owned components** for that
+    combination — one part per category chosen to maximise the selected
+    stat(s), with the resulting aggregate stats, Total / Team Score, and an
+    *if each part +1 level* projection.
+  - **By Track** — pick one of the **21 in-game circuits** from a dropdown to
+    see: your best **2 owned drivers** for that track's spotlighted driver
+    stat (side by side), a **Suggested Boost** — the top 3 owned consumable
+    Boosts ranked by that driver stat first and the track's component stat as
+    tiebreak — and the same full loadout card as By Attribute, built for the
+    track's component stat.
+
+  Your mode, attribute selection, and last-viewed track are all remembered
+  across visits.
 - **Compare** — a sortable, side-by-side stat table of your drivers or your
   components at their current levels. Tap any column header to sort; the wide
   component table scrolls inside its own container.
+- **Boosts** — set how many of each consumable Boost you currently own (used
+  by Loadouts → By Track's Suggested Boost). A dropdown picker shows one
+  Boost's stats and a quantity-owned field at a time, rather than scrolling a
+  list of 69. A **New Boost** form below it lets you add Boosts the game has
+  added that this app doesn't know about yet — enter a name and any of the 13
+  known stat fields; it's blocked from reusing a built-in Boost's name, and
+  once added it behaves exactly like a built-in one (shows in the picker,
+  counts toward Suggested Boost rankings).
 
 ### Season tab (progress dashboard)
 
@@ -99,9 +119,12 @@ Season inputs are saved separately in `localStorage` under **`f1sheet.season.v1`
 
 Read-only, searchable reference tables embedded from the community sheet:
 
-- **Boosts** — all **65 named consumable boosts** and the flat per-race stat
-  bonus each applies. Search by boost name *or* by a stat (e.g. type
-  `cornering` to see every boost that helps cornering).
+- **Boosts** — all **69 named consumable boosts** (the original 65 from the
+  workbook plus 4 discovered in-game since) and the flat per-race stat bonus
+  each applies. Search by boost name *or* by a stat (e.g. type `cornering` to
+  see every boost that helps cornering). This table only covers the built-in
+  list — any Boost you add yourself via Tools → Boosts → New Boost shows up
+  there and in Suggested Boost rankings, but not in this read-only table.
 - **Series Unlocks** — how many drivers and parts first unlock at each Series.
 - **Race Medal Payout** — medal-pot share by tier and finishing position.
 - **Weekly League** — completion weight by final standing.
@@ -164,12 +187,19 @@ go offline and it keeps working.
   future seed-data updates still flow through to cards you haven't touched.
 - Season-dashboard values live under a separate key **`f1sheet.season.v1`**.
 - Per-card **Boosted +10%** toggles live under **`f1sheet.boosted.v1`**.
+- Loadouts preferences (mode, selected attributes, last-viewed track) live
+  under **`f1sheet.loadoutAttrs.v1`**.
+- Boost quantities owned (and which Boost the picker last showed) live under
+  **`f1sheet.boostOwned.v1`**.
+- Boosts you've added yourself via New Boost live under
+  **`f1sheet.customBoosts.v1`**.
 - A `schema` field is stored on each for safe future migrations.
 - Card id format: `d:<Rarity>:<Name>` for drivers, `c:<Category>:<Name>` for
   components.
 
 > **Note:** Export / Import currently covers the card overrides (`f1sheet.v1`).
-> Season inputs persist locally but aren't yet part of the backup file.
+> Season inputs, Loadouts preferences, Boost quantities, and custom Boosts all
+> persist locally but aren't yet part of the backup file.
 
 ### Data notes / limitations
 
@@ -184,11 +214,22 @@ go offline and it keeps working.
   **Series filter/sort**, and the **Series Unlocks** reference table. The **22
   Legendary drivers carry Series 0** in the sheet (they unlock from sources
   other than Series progression), so they show **no Series badge**.
-- **Boosts: 65 unique named boosts.** The workbook's *Boosts* sheet spans ~214
-  rows, but that count includes blank separator rows and repeated header rows,
-  and each boost is listed several times across rarity sections. De-duplicated,
-  there are **65 distinct named boosts**, all with identical values across their
-  repeats — those 65 are what's embedded.
+- **Boosts: 65 unique named boosts from the workbook, plus 4 added since.** The
+  workbook's *Boosts* sheet spans ~214 rows, but that count includes blank
+  separator rows and repeated header rows, and each boost is listed several
+  times across rarity sections. De-duplicated, there are **65 distinct named
+  boosts**, all with identical values across their repeats. **Livewire Plus**,
+  **Midnight**, **Mushroom**, and **Succession** were added later — the game
+  keeps adding new boosts faster than the workbook does, so these were
+  transcribed by hand from in-game screenshots (cross-checked against known
+  boosts' icon shapes to decode their stat values), not sourced from either
+  workbook version. The in-app **New Boost** form (Tools → Boosts) exists for
+  the same reason: to add boosts as the game introduces them without waiting
+  on a code update.
+- **Track Stats are hand-transcribed, not from the workbook.** Neither
+  workbook version has a per-circuit "which stat matters here" table — the 21
+  tracks and their driver-stat/component-stat pairing (used by Loadouts → By
+  Track) were transcribed directly from the in-game Track Stats screens.
 - **"Boosted +10%" interpretation.** The workbook's *Data Input* sheet exposes a
   single global **Boost %** of `0.10` and a per-card **Boosted** boolean, i.e. a
   clean +10% "boosted slot" (distinct from the named consumable Boosts, which
@@ -249,4 +290,6 @@ one, so users get the updated files instead of a stale copy.
 
 Collection snapshot seeded from the community **F1 Clash 2026 Resource Sheet
 v1.0**; per-level stats, costs, Series, boosts and reference tables from the
-author's updated **v1.1** template — both by **TR The Flash**.
+author's updated **v1.1** template — both by **TR The Flash**. Track Stats
+data and the 4 most recently added Boosts are transcribed directly from
+in-game screens, independent of either workbook version.

@@ -383,9 +383,57 @@
   .lo-part>span:last-child{text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   .lo-part.empty{opacity:.6}
 
-  /* tracks */
-  .trk-you{display:flex; flex-direction:column; gap:5px; margin-top:10px; font-size:12.5px; color:var(--muted)}
-  .trk-you b{color:var(--text)}
+  /* loadouts — by track */
+  .trk-select-wrap{margin-bottom:10px}
+  .trk-select-wrap label{display:block; font-size:11px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.06em; color:var(--muted); margin-bottom:6px}
+  .trk-select{width:100%; min-height:var(--tap); border:1px solid var(--line); border-radius:10px;
+    background:var(--surface-2); color:var(--text); font-weight:700; font-size:15px; padding:0 12px;
+    appearance:none; -webkit-appearance:none;
+    background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%239aa6c2" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>');
+    background-repeat:no-repeat; background-position:right 12px center; background-size:18px}
+  .trk-drivers-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px}
+  .trk-driver-card{padding:12px}
+  .trk-driver-card .trk-rank{font-size:10px; font-weight:800; letter-spacing:.06em; color:var(--accent);
+    text-transform:uppercase; margin-bottom:4px}
+  .trk-driver-card .trk-dname{font-size:15px; font-weight:800; margin-bottom:2px}
+  .trk-driver-card .trk-dsub{font-size:11px; color:var(--muted); margin-bottom:8px}
+  .trk-driver-card .trk-dval{font-size:20px; font-weight:800}
+  .trk-driver-card .trk-dval .delta{font-size:12px; margin-left:4px}
+
+  /* suggested boost (Loadouts — By Track) */
+  .trk-boost-row{display:flex; align-items:center; gap:10px; padding:8px 4px;
+    border-bottom:1px solid var(--line)}
+  .trk-boost-row:last-child{border-bottom:0}
+  .trk-boost-rank{font-size:11px; font-weight:800; color:var(--muted); flex:0 0 auto}
+  .trk-boost-main{flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:3px}
+  .trk-boost-name{font-weight:700; font-size:13.5px}
+  .trk-boost-stats{display:flex; flex-wrap:wrap; gap:4px}
+  .trk-boost-stat{font-size:10.5px; color:var(--muted); background:var(--surface-2);
+    border:1px solid var(--line); border-radius:999px; padding:2px 7px}
+  .trk-boost-stat.hot{border-color:var(--accent); color:var(--text)}
+  .trk-boost-qty{font-size:13px; font-weight:800; color:var(--text); flex:0 0 auto}
+
+  /* Boosts tab (quantities owned) */
+  .boost-row{padding:12px}
+  .boost-head{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px}
+  .boost-name{font-weight:800; font-size:14.5px}
+  .boost-name .hint{font-size:11px; font-weight:600; color:var(--muted); text-transform:none; margin-left:6px}
+
+  /* New Boost form (Boosts tab) */
+  .nb-name-field{margin-bottom:10px}
+  .nb-name-field label{display:block; font-size:11px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.06em; color:var(--muted); margin-bottom:6px}
+  .nb-name-field input{width:100%; min-height:var(--tap); border:1px solid var(--line); border-radius:10px;
+    background:var(--surface-2); color:var(--text); font-weight:700; font-size:15px; padding:0 12px}
+  .nb-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px}
+  .nb-field label{display:block; font-size:10px; color:var(--muted); text-transform:uppercase;
+    letter-spacing:.05em; margin-bottom:4px}
+  .nb-field input{width:100%; text-align:right; background:var(--surface-2); color:var(--text);
+    border:1px solid var(--line); border-radius:10px; padding:9px 10px; min-height:var(--tap)}
+  .nb-add{width:100%; min-height:var(--tap); border:0; border-radius:10px; background:var(--red);
+    color:var(--red-ink); font-weight:800; font-size:14px}
+  .nb-add:active{transform:scale(.98)}
 
   /* compare */
   .cmp-scope{display:flex; gap:6px; background:var(--surface); border:1px solid var(--line);
@@ -466,6 +514,16 @@ const BOOST_PCT = 0.10;    // global "Boost %" from the workbook Data Input shee
 // Suggested-Loadouts attribute picker — own namespaced, schema-guarded key.
 const LOADOUT_ATTRS_KEY = "f1sheet.loadoutAttrs.v1";
 const LOADOUT_ATTRS_SCHEMA = 1;
+
+// Quantities owned of each named consumable Boost — own namespaced, schema-guarded key.
+// Distinct from BOOST_KEY/boostedIds above, which is the unrelated per-card "+10%" slot toggle.
+const BOOST_OWNED_KEY = "f1sheet.boostOwned.v1";
+const BOOST_OWNED_SCHEMA = 1;
+
+// User-added custom Boosts (the game keeps adding new ones faster than this app can track
+// them) — own namespaced, schema-guarded key.
+const CUSTOM_BOOSTS_KEY = "f1sheet.customBoosts.v1";
+const CUSTOM_BOOSTS_SCHEMA = 1;
 
 /* ---------- Reward & payout reference tables (from workbook "CCData",
    identical in v1.0 and v1.1) ---------- */
@@ -713,7 +771,64 @@ const REF = {"d:Common:Bottas":{"r":"Common","g":"Common","k":"d","n":["overtaki
 /* ---------- Named consumable Boosts (from workbook "Boosts" sheet) ----------
    Flat per-race stat bonuses. 65 unique boosts; the sheet lists them multiple
    times across rarity sections (raw row count ~214 incl. blank/header rows). */
-const BOOSTS = [{"n":"Ballast","b":{"Race Start":5,"Cornering":10,"Pit Time":5},"t":20},{"n":"Butterfly","b":{"Tyre Use":20,"Power Unit":25,"Pit Time":5},"t":50},{"n":"Champion","b":{"Race Start":10,"Speed":25,"Power Unit":15},"t":50},{"n":"Christmas","b":{"Overtaking":10,"Speed":20,"Cornering":20},"t":50},{"n":"Confetti","b":{"Overtaking":10,"Race Start":25,"Pit Time":15},"t":50},{"n":"Cranberry","b":{"Overtaking":20,"Defending":20,"Cornering":10},"t":50},{"n":"Crown","b":{"Defending":5,"Tyre Use":20,"Pit Time":25},"t":50},{"n":"Cuppa","b":{"Overtaking":10,"Race Start":20,"Cornering":20},"t":50},{"n":"Dead Fast","b":{"Tyre Use":5,"Speed":25,"Power Unit":20},"t":50},{"n":"Djinn","b":{"Defending":15,"Cornering":15,"Power Unit":20},"t":50},{"n":"Downforce","b":{"Defending":10,"Tyre Use":15,"Cornering":5},"t":30},{"n":"Dragon","b":{"Overtaking":20,"Tyre Use":15,"Power Unit":15},"t":50},{"n":"Eagle","b":{"Tyre Use":20,"Speed":15,"Pit Time":15},"t":50},{"n":"Eclipse","b":{"Overtaking":15,"Speed":25,"Pit Time":10},"t":50},{"n":"Eggcepton","b":{"Defending":15,"Power Unit":10,"Pit Time":25},"t":50},{"n":"Eternal Flame","b":{"Overtaking":25,"Tyre Use":10,"Speed":15},"t":50},{"n":"Feral","b":{"Overtaking":25,"Tyre Use":15,"Pit Time":10},"t":50},{"n":"Firework","b":{"Overtaking":15,"Race Start":15,"Speed":20},"t":50},{"n":"Frost","b":{"Race Start":15,"Tyre Use":25,"Power Unit":10},"t":50},{"n":"Full Send","b":{"Overtaking":5,"Speed":25,"Power Unit":20},"t":50},{"n":"Genesis","b":{"Defending":25,"Speed":10,"Cornering":15},"t":50},{"n":"Ghoulfuel","b":{"Overtaking":25,"Power Unit":10,"Pit Time":15},"t":50},{"n":"Gladiator","b":{"Defending":25,"Race Start":15,"Power Unit":10},"t":50},{"n":"Glitz","b":{"Overtaking":15,"Cornering":15,"Power Unit":20},"t":50},{"n":"Handlebar","b":{"Defending":25,"Tyre Use":15,"Cornering":10},"t":50},{"n":"Heartbreaker","b":{"Overtaking":15,"Race Start":20,"Speed":20},"t":55},{"n":"Herald","b":{"Overtaking":10,"Race Start":25,"Cornering":15},"t":50},{"n":"Hex","b":{"Overtaking":20,"Speed":15,"Pit Time":5},"t":40},{"n":"Hook","b":{"Defending":15,"Race Start":10,"Cornering":25},"t":50},{"n":"Impact","b":{"Overtaking":15,"Speed":10,"Power Unit":5},"t":30},{"n":"Instinct","b":{"Race Start":10,"Tyre Use":5,"Power Unit":15},"t":30},{"n":"Iron Force","b":{"Defending":20,"Tyre Use":10,"Power Unit":20},"t":50},{"n":"Kawaii","b":{"Race Start":15,"Cornering":20,"Pit Time":15},"t":50},{"n":"Launch Pad","b":{"Race Start":25,"Power Unit":15,"Pit Time":10},"t":50},{"n":"Livewire","b":{"Tyre Use":20,"Speed":15,"Impact":15},"t":50},{"n":"Lumberjack","b":{"Defending":15,"Tyre Use":10,"Pit Time":25},"t":50},{"n":"Merlion","b":{"Speed":15,"Cornering":25,"Pit Time":10},"t":50},{"n":"Movember","b":{"Defending":15,"Tyre Use":10,"Cornering":25},"t":50},{"n":"Nazar","b":{"Race Start":20,"Tyre Use":15,"Cornering":15},"t":50},{"n":"Oud","b":{"Overtaking":15,"Cornering":10,"Pit Time":25},"t":50},{"n":"Overcharge","b":{"Race Start":20,"Speed":15,"Recharge":15},"t":50},{"n":"Palm","b":{"Defending":20,"Race Start":10,"Tyre Use":20},"t":50},{"n":"Pretzel","b":{"Tyre Use":25,"Power Unit":15,"Pit Time":10},"t":50},{"n":"Prince","b":{"Defending":10,"Race Start":20,"Cornering":20},"t":50},{"n":"Pumpkin","b":{"Race Start":10,"Tyre Use":20,"Cornering":20},"t":50},{"n":"Rainbow","b":{"Defending":25,"Race Start":5,"Speed":20},"t":50},{"n":"Reindeer","b":{"Defending":20,"Cornering":10,"Pit Time":20},"t":50},{"n":"Rookie Reload","b":{"Overtaking":5,"Cornering":20,"Power Unit":25},"t":50},{"n":"Rookie Rush","b":{"Defending":15,"Race Start":10,"Tyre Use":25},"t":50},{"n":"Rooster","b":{"Overtaking":20,"Race Start":20,"Power Unit":10},"t":50},{"n":"Samba","b":{"Speed":5,"Power Unit":25,"Pit Time":20},"t":50},{"n":"Schooner","b":{"Defending":10,"Race Start":25,"Pit Time":15},"t":50},{"n":"Self Control","b":{"Tyre Use":5,"Cornering":5,"Power Unit":5},"t":15},{"n":"Skull","b":{"Overtaking":15,"Speed":25,"Power Unit":10},"t":50},{"n":"Street Shark","b":{"Overtaking":10,"Race Start":25,"Speed":15},"t":50},{"n":"Surf","b":{"Race Start":25,"Tyre Use":5,"Power Unit":20},"t":50},{"n":"Taurus","b":{"Overtaking":5,"Speed":20,"Power Unit":25},"t":50},{"n":"Timeless","b":{"Race Start":15,"Speed":10,"Cornering":25},"t":50},{"n":"Tire Water","b":{"Tyre Use":10,"Cornering":5,"Pit Time":5},"t":20},{"n":"Tsar","b":{"Defending":10,"Tyre Use":25,"Cornering":15},"t":50},{"n":"Tulip","b":{"Defending":10,"Speed":20,"Pit Time":20},"t":50},{"n":"Tune-In","b":{"Speed":10,"Cornering":15,"Pit Time":25},"t":50},{"n":"Unstoppable","b":{"Overtaking":25,"Speed":15,"Power Unit":10},"t":50},{"n":"Vice","b":{"Defending":25,"Speed":10,"Power Unit":15},"t":50},{"n":"Warrior","b":{"Overtaking":5,"Defending":5,"Speed":10},"t":20}];
+const BOOSTS = [{"n":"Ballast","b":{"Race Start":5,"Cornering":10,"Pit Time":5},"t":20},{"n":"Butterfly","b":{"Tyre Use":20,"Power Unit":25,"Pit Time":5},"t":50},{"n":"Champion","b":{"Race Start":10,"Speed":25,"Power Unit":15},"t":50},{"n":"Christmas","b":{"Overtaking":10,"Speed":20,"Cornering":20},"t":50},{"n":"Confetti","b":{"Overtaking":10,"Race Start":25,"Pit Time":15},"t":50},{"n":"Cranberry","b":{"Overtaking":20,"Defending":20,"Cornering":10},"t":50},{"n":"Crown","b":{"Defending":5,"Tyre Use":20,"Pit Time":25},"t":50},{"n":"Cuppa","b":{"Overtaking":10,"Race Start":20,"Cornering":20},"t":50},{"n":"Dead Fast","b":{"Tyre Use":5,"Speed":25,"Power Unit":20},"t":50},{"n":"Djinn","b":{"Defending":15,"Cornering":15,"Power Unit":20},"t":50},{"n":"Downforce","b":{"Defending":10,"Tyre Use":15,"Cornering":5},"t":30},{"n":"Dragon","b":{"Overtaking":20,"Tyre Use":15,"Power Unit":15},"t":50},{"n":"Eagle","b":{"Tyre Use":20,"Speed":15,"Pit Time":15},"t":50},{"n":"Eclipse","b":{"Overtaking":15,"Speed":25,"Pit Time":10},"t":50},{"n":"Eggcepton","b":{"Defending":15,"Power Unit":10,"Pit Time":25},"t":50},{"n":"Eternal Flame","b":{"Overtaking":25,"Tyre Use":10,"Speed":15},"t":50},{"n":"Feral","b":{"Overtaking":25,"Tyre Use":15,"Pit Time":10},"t":50},{"n":"Firework","b":{"Overtaking":15,"Race Start":15,"Speed":20},"t":50},{"n":"Frost","b":{"Race Start":15,"Tyre Use":25,"Power Unit":10},"t":50},{"n":"Full Send","b":{"Overtaking":5,"Speed":25,"Power Unit":20},"t":50},{"n":"Genesis","b":{"Defending":25,"Speed":10,"Cornering":15},"t":50},{"n":"Ghoulfuel","b":{"Overtaking":25,"Power Unit":10,"Pit Time":15},"t":50},{"n":"Gladiator","b":{"Defending":25,"Race Start":15,"Power Unit":10},"t":50},{"n":"Glitz","b":{"Overtaking":15,"Cornering":15,"Power Unit":20},"t":50},{"n":"Handlebar","b":{"Defending":25,"Tyre Use":15,"Cornering":10},"t":50},{"n":"Heartbreaker","b":{"Overtaking":15,"Race Start":20,"Speed":20},"t":55},{"n":"Herald","b":{"Overtaking":10,"Race Start":25,"Cornering":15},"t":50},{"n":"Hex","b":{"Overtaking":20,"Speed":15,"Pit Time":5},"t":40},{"n":"Hook","b":{"Defending":15,"Race Start":10,"Cornering":25},"t":50},{"n":"Impact","b":{"Overtaking":15,"Speed":10,"Power Unit":5},"t":30},{"n":"Instinct","b":{"Race Start":10,"Tyre Use":5,"Power Unit":15},"t":30},{"n":"Iron Force","b":{"Defending":20,"Tyre Use":10,"Power Unit":20},"t":50},{"n":"Kawaii","b":{"Race Start":15,"Cornering":20,"Pit Time":15},"t":50},{"n":"Launch Pad","b":{"Race Start":25,"Power Unit":15,"Pit Time":10},"t":50},{"n":"Livewire","b":{"Tyre Use":20,"Speed":15,"Impact":15},"t":50},{"n":"Livewire Plus","b":{"Overtaking":20,"Speed":15,"Recharge":20},"t":55},{"n":"Lumberjack","b":{"Defending":15,"Tyre Use":10,"Pit Time":25},"t":50},{"n":"Merlion","b":{"Speed":15,"Cornering":25,"Pit Time":10},"t":50},{"n":"Midnight","b":{"Race Start":15,"Power Unit":25,"Pit Time":10},"t":50},{"n":"Movember","b":{"Defending":15,"Tyre Use":10,"Cornering":25},"t":50},{"n":"Mushroom","b":{"Power Unit":25,"Impact":10,"Recharge":15},"t":50},{"n":"Nazar","b":{"Race Start":20,"Tyre Use":15,"Cornering":15},"t":50},{"n":"Oud","b":{"Overtaking":15,"Cornering":10,"Pit Time":25},"t":50},{"n":"Overcharge","b":{"Race Start":20,"Speed":15,"Recharge":15},"t":50},{"n":"Palm","b":{"Defending":20,"Race Start":10,"Tyre Use":20},"t":50},{"n":"Pretzel","b":{"Tyre Use":25,"Power Unit":15,"Pit Time":10},"t":50},{"n":"Prince","b":{"Defending":10,"Race Start":20,"Cornering":20},"t":50},{"n":"Pumpkin","b":{"Race Start":10,"Tyre Use":20,"Cornering":20},"t":50},{"n":"Rainbow","b":{"Defending":25,"Race Start":5,"Speed":20},"t":50},{"n":"Reindeer","b":{"Defending":20,"Cornering":10,"Pit Time":20},"t":50},{"n":"Rookie Reload","b":{"Overtaking":5,"Cornering":20,"Power Unit":25},"t":50},{"n":"Rookie Rush","b":{"Defending":15,"Race Start":10,"Tyre Use":25},"t":50},{"n":"Rooster","b":{"Overtaking":20,"Race Start":20,"Power Unit":10},"t":50},{"n":"Samba","b":{"Speed":5,"Power Unit":25,"Pit Time":20},"t":50},{"n":"Schooner","b":{"Defending":10,"Race Start":25,"Pit Time":15},"t":50},{"n":"Self Control","b":{"Tyre Use":5,"Cornering":5,"Power Unit":5},"t":15},{"n":"Skull","b":{"Overtaking":15,"Speed":25,"Power Unit":10},"t":50},{"n":"Street Shark","b":{"Overtaking":10,"Race Start":25,"Speed":15},"t":50},{"n":"Succession","b":{"Defending":20,"Tyre Use":10,"Overtaking":20},"t":50},{"n":"Surf","b":{"Race Start":25,"Tyre Use":5,"Power Unit":20},"t":50},{"n":"Taurus","b":{"Overtaking":5,"Speed":20,"Power Unit":25},"t":50},{"n":"Timeless","b":{"Race Start":15,"Speed":10,"Cornering":25},"t":50},{"n":"Tire Water","b":{"Tyre Use":10,"Cornering":5,"Pit Time":5},"t":20},{"n":"Tsar","b":{"Defending":10,"Tyre Use":25,"Cornering":15},"t":50},{"n":"Tulip","b":{"Defending":10,"Speed":20,"Pit Time":20},"t":50},{"n":"Tune-In","b":{"Speed":10,"Cornering":15,"Pit Time":25},"t":50},{"n":"Unstoppable","b":{"Overtaking":25,"Speed":15,"Power Unit":10},"t":50},{"n":"Vice","b":{"Defending":25,"Speed":10,"Power Unit":15},"t":50},{"n":"Warrior","b":{"Overtaking":5,"Defending":5,"Speed":10},"t":20}];
+// DRIVER_STAT_LABELS uses "Tyre Mgmt"; the Boosts data (like the workbook) calls it "Tyre Use".
+function boostDsKey(ds){ return ds === "Tyre Mgmt" ? "Tyre Use" : ds; }
+
+// Full stat vocabulary a Boost can carry, driver stats then component stats. Offered in full
+// on the New Boost form since which subset any given boost uses varies, and the game adds new
+// boosts faster than this app can track them — better to expose every stat than guess a subset.
+const BOOST_ATTR_NAMES = [
+  "Overtaking","Defending","Qualifying","Race Start","Tyre Use",
+  "Speed","Cornering","Power Unit","Pit Time","Overtake M","Impact","Duration","Recharge"
+];
+
+function boostsOwnedHTML(){
+  const all = allBoosts();
+  if(!boostPicked || !all.some(b => b.n === boostPicked)) boostPicked = all[0].n;
+  const picked = all.find(b => b.n === boostPicked);
+  const isCustom = customBoosts.some(b => b.n === picked.n);
+
+  const select = `<div class="trk-select-wrap">
+    <label for="boostSel">Boost</label>
+    <select class="trk-select" id="boostSel" data-boost-select>${
+      all.map(b => `<option value="${esc(b.n)}"${b.n===picked.n?' selected':''}>${esc(b.n)}${customBoosts.some(c=>c.n===b.n)?' (custom)':''}</option>`).join("")
+    }</select>
+  </div>`;
+
+  const qty = boostOwned[picked.n] || 0;
+  const chips = Object.entries(picked.b).map(([k,v]) => `<span class="lo-stat">${esc(k)} <b>+${v}</b></span>`).join("");
+  const card = `<div class="panel boost-row" data-boost="${esc(picked.n)}">
+    <div class="boost-head"><span class="boost-name">${esc(picked.n)}${isCustom?' <span class="hint">custom</span>':''}</span>
+      <div class="amt"><label for="bq-${esc(picked.n)}">Owned</label>
+        <input id="bq-${esc(picked.n)}" type="number" inputmode="numeric" min="0" step="1" value="${qty}"
+          data-act="boostqty" aria-label="Quantity owned for ${esc(picked.n)}"></div>
+    </div>
+    <div class="lo-aggs">${chips}</div>
+  </div>`;
+
+  const attrFields = BOOST_ATTR_NAMES.map(n => `
+    <div class="nb-field">
+      <label for="nb-${esc(n)}">${esc(n)}</label>
+      <input id="nb-${esc(n)}" type="number" inputmode="numeric" step="1" placeholder="0" data-nb-attr="${esc(n)}">
+    </div>`).join("");
+
+  const newBoostForm = `<div class="panel">
+    <h3>New Boost</h3>
+    <div class="nb-name-field">
+      <label for="nb-name">Name</label>
+      <input id="nb-name" type="text" placeholder="e.g. Nova" data-nb-name>
+    </div>
+    <div class="nb-grid">${attrFields}</div>
+    <button type="button" class="nb-add" data-nb-add>Add Boost</button>
+  </div>`;
+
+  return `<div class="rt-note">Set how many of each consumable Boost you currently own — used by Loadouts →
+    By Track to suggest one for the selected circuit. These are flat, whole-race bonuses, separate from the
+    per-card “Boosted +10%” slot toggle on Drivers/Parts. The game adds new Boosts faster than this list can
+    track — use New Boost below to add one; it shows up in the picker above and counts toward suggestions just
+    like the built-in ones.</div>${select}${card}${newBoostForm}`;
+}
 
 /* ---------- State ---------- */
 let overrides = {};        // { id: {level, amount} }
@@ -728,6 +843,11 @@ let cmpKind = "d";         // Compare scope: "d" drivers | "c" components
 let cmpSort = {stat:"tot", dir:-1}; // Compare active sort
 let boostedIds = {};       // { id: true } cards toggled to +10% boosted
 let loadoutAttrs = new Set(["Speed"]); // Suggested Loadouts: selected optimization attributes
+let loadoutMode = "attr";          // Loadouts sub-mode: "attr" (by attribute) | "track" (by Track Spec)
+let loadoutTrack = "Abu Dhabi";    // Loadouts "By Track" mode: selected circuit name (see TRACKS below)
+let boostOwned = {};              // { boostName: quantity } — how many of each consumable Boost you own
+let customBoosts = [];            // [{n, b:{stat:val,...}}] user-added Boosts, alongside the built-in BOOSTS
+let boostPicked = null;           // Boosts tab: name of the boost currently shown in the picker
 
 function load(){
   try{
@@ -800,18 +920,65 @@ function loadLoadoutAttrs(){
     const raw = localStorage.getItem(LOADOUT_ATTRS_KEY);
     if(!raw) return;
     const data = JSON.parse(raw);
-    if(data && typeof data === "object" && data.schema === LOADOUT_ATTRS_SCHEMA && Array.isArray(data.attrs) && data.attrs.length){
-      loadoutAttrs = new Set(data.attrs);
+    if(data && typeof data === "object" && data.schema === LOADOUT_ATTRS_SCHEMA){
+      if(Array.isArray(data.attrs) && data.attrs.length) loadoutAttrs = new Set(data.attrs);
+      if(data.mode === "attr" || data.mode === "track") loadoutMode = data.mode;
+      if(typeof data.track === "string" && data.track) loadoutTrack = data.track;
     }
   }catch(e){ /* corrupt storage -> keep default */ }
 }
 function saveLoadoutAttrs(){
   try{
     localStorage.setItem(LOADOUT_ATTRS_KEY, JSON.stringify({
-      schema:LOADOUT_ATTRS_SCHEMA, attrs:[...loadoutAttrs], savedAt:new Date().toISOString()
+      schema:LOADOUT_ATTRS_SCHEMA, attrs:[...loadoutAttrs], mode:loadoutMode, track:loadoutTrack,
+      savedAt:new Date().toISOString()
     }));
   }catch(e){ toast("Couldn't save — storage full?"); }
 }
+
+/* ---------- Boost quantities owned ---------- */
+function loadBoostOwned(){
+  boostOwned = {};
+  try{
+    const raw = localStorage.getItem(BOOST_OWNED_KEY);
+    if(!raw) return;
+    const data = JSON.parse(raw);
+    if(data && typeof data === "object" && data.schema === BOOST_OWNED_SCHEMA){
+      if(data.qty) boostOwned = data.qty;
+      if(typeof data.picked === "string" && data.picked) boostPicked = data.picked;
+    }
+  }catch(e){ /* corrupt storage -> none owned */ }
+}
+function saveBoostOwned(){
+  try{
+    localStorage.setItem(BOOST_OWNED_KEY, JSON.stringify({
+      schema:BOOST_OWNED_SCHEMA, qty:boostOwned, picked:boostPicked, savedAt:new Date().toISOString()
+    }));
+  }catch(e){ toast("Couldn't save — storage full?"); }
+}
+
+/* ---------- Custom (user-added) Boosts ---------- */
+function loadCustomBoosts(){
+  customBoosts = [];
+  try{
+    const raw = localStorage.getItem(CUSTOM_BOOSTS_KEY);
+    if(!raw) return;
+    const data = JSON.parse(raw);
+    if(data && typeof data === "object" && data.schema === CUSTOM_BOOSTS_SCHEMA && Array.isArray(data.boosts)){
+      customBoosts = data.boosts;
+    }
+  }catch(e){ /* corrupt storage -> none custom */ }
+}
+function saveCustomBoosts(){
+  try{
+    localStorage.setItem(CUSTOM_BOOSTS_KEY, JSON.stringify({
+      schema:CUSTOM_BOOSTS_SCHEMA, boosts:customBoosts, savedAt:new Date().toISOString()
+    }));
+  }catch(e){ toast("Couldn't save — storage full?"); }
+}
+// All boosts, built-in + user-added, in one list — used everywhere a boost lookup happens
+// (the picker, and the Suggested Boost ranking) so custom entries behave identically.
+function allBoosts(){ return BOOSTS.concat(customBoosts); }
 
 /* ---------- Season computation (mirrors the workbook's CC scoring) ---------- */
 function ratio(cur, tgt){ if(!(tgt > 0)) return 0; return clamp(cur / tgt, 0, 1); }
@@ -1426,7 +1593,7 @@ function ownedCards(kind){
 }
 
 function toolNav(){
-  const items = [["drivers","Drivers"],["loadouts","Loadouts"],["compare","Compare"],["tracks","Tracks"]];
+  const items = [["drivers","Drivers"],["loadouts","Loadouts"],["compare","Compare"],["boosts","Boosts"]];
   return `<div class="subnav" role="tablist" aria-label="Tools view">` + items.map(([k,l]) =>
     `<button role="tab" data-tv="${k}" aria-selected="${k===toolView}">${l}</button>`).join("") + `</div>`;
 }
@@ -1436,7 +1603,7 @@ function renderTools(){
   let body;
   if(toolView === "loadouts") body = suggestLoadoutsHTML();
   else if(toolView === "compare") body = compareHTML(q);
-  else if(toolView === "tracks") body = tracksHTML(q);
+  else if(toolView === "boosts") body = boostsOwnedHTML();
   else body = suggestDriversHTML(q);
   app.innerHTML = `<div class="tools">${toolNav()}${body}</div>`;
 }
@@ -1514,18 +1681,11 @@ function bestLoadout(strat){
   return {picks, agg, total, team, upTotal, upTeam, count};
 }
 
-function suggestLoadoutsHTML(){
-  if(!ownedCards("c").length){
-    return `<div class="empty">No leveled components yet. Set some part levels on the Parts tab to build loadouts.</div>`;
-  }
-  const attrBar = `<div class="lo-attr-bar" role="group" aria-label="Optimize for">${
-    LOADOUT_ATTR_NAMES.map(n => `<button type="button" data-lattr="${esc(n)}" aria-pressed="${loadoutAttrs.has(n)}">${esc(n)}</button>`).join("")
-  }</div>`;
-
-  const strat = {t:[...loadoutAttrs]};
-  const lo = bestLoadout(strat);
+// Renders one full loadout card (aggregate stat chips, Total/Team, +1-lvl projection, all 7 parts).
+// Shared by both Loadouts modes (By Attribute and By Track) so the two stay visually identical.
+function loadoutCardHTML(title, hint, hotStats, lo){
   const aggChips = CAR_STATS.map(n => {
-    const hot = strat.t.includes(n);
+    const hot = hotStats.includes(n);
     return `<span class="lo-stat${hot?' hot':''}">${esc(n)} <b>${fmtNum(Math.round((lo.agg[n]||0)*100)/100)}</b></span>`;
   }).join("");
   const parts = lo.picks.map(p => {
@@ -1535,18 +1695,154 @@ function suggestLoadoutsHTML(){
       <span><b>${esc(p.c.name)}</b>${boost} <span class="muted">Lv ${p.c.level}</span></span></div>`;
   }).join("");
   const upT = lo.upTotal - lo.total, upM = lo.upTeam - lo.team;
-  const card = `<div class="panel lo-card">
-    <h3>${esc(strat.t.join(" + ") || "—")}<span class="hint">${lo.count}/7 parts</span></h3>
+  return `<div class="panel lo-card">
+    <h3>${esc(title)}<span class="hint">${esc(hint)}</span></h3>
     <div class="lo-aggs">${aggChips}</div>
     <div class="lo-tot">Total <b>${fmt(lo.total)}</b> · Team <b>${fmt(lo.team)}</b>
       <span class="muted">· if each part +1 lvl → ${fmt(lo.upTotal)} <span class="delta up">+${upT}</span> / ${fmt(lo.upTeam)} <span class="delta up">+${upM}</span></span></div>
     <div class="lo-parts">${parts}</div>
   </div>`;
+}
 
-  return `<div class="rt-note">Best loadout from <b>your owned components</b> for the selected attribute(s) — one
-    part per category, chosen to maximise their combined stat(s) at current levels. Tap attributes above to change
-    what's optimized for. (The workbook’s per-Series/GP picks are formula-driven off the author’s own collection, so
-    this is computed live from yours instead.)</div>${attrBar}${card}`;
+function suggestLoadoutsHTML(){
+  const modeSwitch = `<div class="cmp-scope">
+    <button data-lm="attr" aria-selected="${loadoutMode==='attr'}">By Attribute</button>
+    <button data-lm="track" aria-selected="${loadoutMode==='track'}">By Track</button>
+  </div>`;
+
+  if(loadoutMode === "track") return modeSwitch + trackSpecHTML();
+
+  if(!ownedCards("c").length){
+    return modeSwitch + `<div class="empty">No leveled components yet. Set some part levels on the Parts tab to build loadouts.</div>`;
+  }
+  const attrBar = `<div class="lo-attr-bar" role="group" aria-label="Optimize for">${
+    LOADOUT_ATTR_NAMES.map(n => `<button type="button" data-lattr="${esc(n)}" aria-pressed="${loadoutAttrs.has(n)}">${esc(n)}</button>`).join("")
+  }</div>`;
+
+  const strat = {t:[...loadoutAttrs]};
+  const lo = bestLoadout(strat);
+  const card = loadoutCardHTML(strat.t.join(" + ") || "—", `${lo.count}/7 parts`, strat.t, lo);
+
+  return modeSwitch + `<div class="rt-note">Best loadout from <b>your owned components</b> for the selected
+    attribute(s) — one part per category, chosen to maximise their combined stat(s) at current levels. Tap
+    attributes above to change what's optimized for. (The workbook’s per-Series/GP picks are formula-driven off
+    the author’s own collection, so this is computed live from yours instead.)</div>${attrBar}${card}`;
+}
+
+/* ----- 4b) Loadouts — By Track: in-game "Track Stats" spotlight one driver stat and one component
+   stat per circuit. Pick a track to see your best 2 owned drivers for its driver stat, and your best
+   owned loadout for its component stat. Transcribed by hand from in-game Track Stats screens (not
+   covered by the source workbook). Add new circuits here as they're confirmed in-game. */
+const TRACKS = [
+  {n:"Abu Dhabi",    c:"UAE",             ds:"Overtaking", cs:"Speed"},
+  {n:"Austin",       c:"USA",             ds:"Race Start", cs:"Cornering"},
+  {n:"Baku",         c:"Azerbaijan",      ds:"Tyre Mgmt",   cs:"Power Unit"},
+  {n:"Barcelona",    c:"Spain",           ds:"Tyre Mgmt",   cs:"Speed"},
+  {n:"Hungaroring",  c:"Hungary",         ds:"Overtaking", cs:"Cornering"},
+  {n:"Jeddah",       c:"Saudi Arabia",    ds:"Defending",  cs:"Speed"},
+  {n:"Las Vegas",    c:"USA",             ds:"Overtaking", cs:"Speed"},
+  {n:"Melbourne",    c:"Australia",       ds:"Race Start", cs:"Cornering"},
+  {n:"Mexico City",  c:"Mexico",          ds:"Tyre Mgmt",   cs:"Power Unit"},
+  {n:"Miami",        c:"USA",             ds:"Overtaking", cs:"Speed"},
+  {n:"Monaco",       c:"Monaco",          ds:"Defending",  cs:"Cornering"},
+  {n:"Monza",        c:"Italy",           ds:"Defending",  cs:"Speed"},
+  {n:"Montréal",     c:"Canada",          ds:"Race Start", cs:"Power Unit"},
+  {n:"Sakhir",       c:"Bahrain",         ds:"Tyre Mgmt",   cs:"Power Unit"},
+  {n:"Shanghai",     c:"China",           ds:"Defending",  cs:"Power Unit"},
+  {n:"Silverstone",  c:"United Kingdom",  ds:"Overtaking", cs:"Speed"},
+  {n:"Singapore",    c:"Singapore",       ds:"Race Start", cs:"Speed"},
+  {n:"São Paulo",    c:"Brazil",          ds:"Overtaking", cs:"Power Unit"},
+  {n:"Spielberg",    c:"Austria",         ds:"Race Start", cs:"Cornering"},
+  {n:"Suzuka",       c:"Japan",           ds:"Tyre Mgmt",   cs:"Cornering"},
+  {n:"Zandvoort",    c:"Netherlands",     ds:"Defending",  cs:"Cornering"}
+];
+// In-game wording is "Tyre Management"; DRIVER_STAT_LABELS uses "Tyre Mgmt" for lookup.
+const TRACK_DS_LABEL = {"Tyre Mgmt":"Tyre Management"};
+
+function trackSpecHTML(){
+  if(!TRACKS.some(t => t.n === loadoutTrack)) loadoutTrack = TRACKS[0].n;
+  const track = TRACKS.find(t => t.n === loadoutTrack);
+  const dsIdx = DRIVER_STAT_LABELS.indexOf(track.ds);
+  const dsLabel = TRACK_DS_LABEL[track.ds] || track.ds;
+
+  const select = `<div class="trk-select-wrap">
+    <label for="trackSel">Track</label>
+    <select class="trk-select" id="trackSel" data-trk-select>${
+      TRACKS.map(t => `<option value="${esc(t.n)}"${t.n===track.n?' selected':''}>${esc(t.n)} — ${esc(t.c)}</option>`).join("")
+    }</select>
+  </div>`;
+
+  const statChips = `<div class="panel lo-card trk-card">
+    <h3>${esc(track.n)}<span class="hint">${esc(track.c)}</span></h3>
+    <div class="lo-aggs">
+      <span class="lo-stat hot">${esc(dsLabel)}</span>
+      <span class="lo-stat hot">${esc(track.cs)}</span>
+    </div>
+  </div>`;
+
+  const drivers = ownedCards("d");
+  let driversBlock;
+  if(!drivers.length){
+    driversBlock = `<div class="empty">No leveled drivers yet. Set some driver levels on the Drivers tab.</div>`;
+  }else{
+    const ranked = drivers.map(c => {
+      const st = statsView(c.id, c.level, isBoosted(c.id));
+      const up = c.level < c.cap ? statsView(c.id, c.level + 1, isBoosted(c.id)) : null;
+      return {c, st, up};
+    }).sort((a,b) => b.st.vals[dsIdx] - a.st.vals[dsIdx]).slice(0, 2);
+    const cards = ranked.map((r, idx) => {
+      const v = r.st.vals[dsIdx];
+      const nextV = r.up ? r.up.vals[dsIdx] : null;
+      const boost = isBoosted(r.c.id) ? `<span class="tag-boost">+10%</span>` : "";
+      return `<div class="panel trk-driver-card">
+        <div class="trk-rank">Best ${esc(dsLabel)} · #${idx+1}</div>
+        <div class="trk-dname">${esc(r.c.name)}${boost}</div>
+        <div class="trk-dsub">${esc(r.c.rarity)} · Lv ${r.c.level} · Tot ${fmt(r.st.total)} / Team ${fmt(r.st.team)}</div>
+        <div class="trk-dval">${fmtNum(v)}${nextV!=null?`<span class="delta up">→${fmtNum(nextV)}</span>`:""}</div>
+      </div>`;
+    }).join("");
+    driversBlock = `<div class="trk-drivers-grid">${cards}</div>`;
+  }
+
+  // Suggested Boosts: rank owned boosts (qty > 0) by the driver stat first, the component
+  // stat as tiebreak — top 3.
+  const dsKey = boostDsKey(track.ds);
+  const ownedBoosts = allBoosts().filter(b => (boostOwned[b.n] || 0) > 0);
+  let boostBlock;
+  if(!ownedBoosts.length){
+    boostBlock = `<div class="empty">No boosts owned yet. Set quantities on the Boosts tab.</div>`;
+  }else{
+    const ranked = ownedBoosts.map(b => ({
+      b, dsVal: b.b[dsKey] || 0, csVal: b.b[track.cs] || 0
+    })).sort((a,b) => (b.dsVal - a.dsVal) || (b.csVal - a.csVal) || a.b.n.localeCompare(b.b.n))
+      .slice(0, 3);
+    const rows = ranked.map((r, idx) => {
+      const stats = Object.entries(r.b.b).map(([k,v]) =>
+        `<span class="trk-boost-stat${k===dsKey||k===track.cs?' hot':''}">${esc(k)} +${v}</span>`).join("");
+      return `<div class="trk-boost-row">
+        <span class="trk-boost-rank">#${idx+1}</span>
+        <span class="trk-boost-main">
+          <span class="trk-boost-name">${esc(r.b.n)}</span>
+          <span class="trk-boost-stats">${stats}</span>
+        </span>
+        <span class="trk-boost-qty">×${boostOwned[r.b.n]}</span>
+      </div>`;
+    }).join("");
+    boostBlock = `<div class="panel"><h3>Suggested Boost<span class="hint">top ${ranked.length}</span></h3>${rows}</div>`;
+  }
+
+  let loadoutBlock;
+  if(ownedCards("c").length){
+    const lo = bestLoadout({t:[track.cs]});
+    loadoutBlock = loadoutCardHTML(`${track.cs} loadout`, `${lo.count}/7 parts`, [track.cs], lo);
+  }else{
+    loadoutBlock = `<div class="empty">No leveled components yet. Set some part levels on the Parts tab to build a loadout.</div>`;
+  }
+
+  return `<div class="rt-note">Each circuit's in-game <b>Track Stats</b> spotlight one driver stat and one
+    component stat. Pick a track to see your best 2 owned drivers for its driver stat, your best owned loadout
+    for its component stat, and a suggested consumable Boost — all computed live from your collection.</div>
+    ${select}${statChips}${driversBlock}${boostBlock}${loadoutBlock}`;
 }
 
 /* ----- 5) Compare: sortable side-by-side table at current levels ----- */
@@ -1610,78 +1906,6 @@ function compareHTML(q){
     column header to sort. Scroll the table sideways for more stats.</div>
     <div class="rtable"><div class="rt-scroll"><table class="rt cmp">
       <thead>${head}</thead><tbody>${body}</tbody></table></div></div>`;
-}
-
-/* ----- 6) Tracks: in-game circuit "Track Stats" reference -----
-   Each circuit's in-game Track Stats screen spotlights one driver stat and one component
-   stat — a car/driver built around those two carries an edge there. Transcribed by hand
-   from the in-game Track Stats screens (not part of the TR The Flash workbook, which
-   doesn't cover this). Add new circuits here as they're confirmed in-game. */
-const TRACKS = [
-  {n:"Abu Dhabi",    c:"UAE",             ds:"Overtaking", cs:"Speed"},
-  {n:"Austin",       c:"USA",             ds:"Race Start", cs:"Cornering"},
-  {n:"Baku",         c:"Azerbaijan",      ds:"Tyre Mgmt",   cs:"Power Unit"},
-  {n:"Barcelona",    c:"Spain",           ds:"Tyre Mgmt",   cs:"Speed"},
-  {n:"Hungaroring",  c:"Hungary",         ds:"Overtaking", cs:"Cornering"},
-  {n:"Jeddah",       c:"Saudi Arabia",    ds:"Defending",  cs:"Speed"},
-  {n:"Las Vegas",    c:"USA",             ds:"Overtaking", cs:"Speed"},
-  {n:"Melbourne",    c:"Australia",       ds:"Race Start", cs:"Cornering"},
-  {n:"Mexico City",  c:"Mexico",          ds:"Tyre Mgmt",   cs:"Power Unit"},
-  {n:"Miami",        c:"USA",             ds:"Overtaking", cs:"Speed"},
-  {n:"Monaco",       c:"Monaco",          ds:"Defending",  cs:"Cornering"},
-  {n:"Monza",        c:"Italy",           ds:"Defending",  cs:"Speed"},
-  {n:"Montréal", c:"Canada",         ds:"Race Start", cs:"Power Unit"},
-  {n:"Sakhir",       c:"Bahrain",         ds:"Tyre Mgmt",   cs:"Power Unit"},
-  {n:"Shanghai",     c:"China",           ds:"Defending",  cs:"Power Unit"},
-  {n:"Silverstone",  c:"United Kingdom",  ds:"Overtaking", cs:"Speed"},
-  {n:"Singapore",    c:"Singapore",       ds:"Race Start", cs:"Speed"},
-  {n:"São Paulo", c:"Brazil",        ds:"Overtaking", cs:"Power Unit"},
-  {n:"Spielberg",    c:"Austria",         ds:"Race Start", cs:"Cornering"},
-  {n:"Suzuka",       c:"Japan",           ds:"Tyre Mgmt",   cs:"Cornering"},
-  {n:"Zandvoort",    c:"Netherlands",     ds:"Defending",  cs:"Cornering"}
-];
-// In-game wording is "Tyre Management"; DRIVER_STAT_LABELS uses "Tyre Mgmt" for lookup.
-const TRACK_DS_LABEL = {"Tyre Mgmt":"Tyre Management"};
-
-function tracksHTML(q){
-  const tracks = TRACKS.filter(t => !q || t.n.toLowerCase().includes(q) || t.c.toLowerCase().includes(q));
-  if(!tracks.length) return `<div class="empty">No track matches “${esc(query)}”.</div>`;
-
-  const drivers = ownedCards("d");
-  const haveComponents = ownedCards("c").length > 0;
-
-  const cards = tracks.map(t => {
-    const dsIdx = DRIVER_STAT_LABELS.indexOf(t.ds);
-    let bestDriver = null;
-    for(const c of drivers){
-      const st = statsView(c.id, c.level, isBoosted(c.id));
-      const v = st.vals[dsIdx];
-      if(!bestDriver || v > bestDriver.v) bestDriver = {c, v};
-    }
-    const lo = haveComponents ? bestLoadout({t:[t.cs]}) : null;
-    const dsLabel = TRACK_DS_LABEL[t.ds] || t.ds;
-
-    return `<div class="panel lo-card trk-card">
-      <h3>${esc(t.n)}<span class="hint">${esc(t.c)}</span></h3>
-      <div class="lo-aggs">
-        <span class="lo-stat hot">${esc(dsLabel)}</span>
-        <span class="lo-stat hot">${esc(t.cs)}</span>
-      </div>
-      <div class="trk-you">
-        <span>Best ${esc(dsLabel)} driver: ${bestDriver
-          ? `<b>${esc(bestDriver.c.name)}</b> <span class="muted">${fmtNum(bestDriver.v)}</span>`
-          : `<span class="muted">— none leveled —</span>`}</span>
-        <span>Best owned ${esc(t.cs)} (7/7 loadout): ${haveComponents
-          ? `<b>${fmtNum(Math.round((lo.agg[t.cs]||0)*100)/100)}</b>`
-          : `<span class="muted">— none owned —</span>`}</span>
-      </div>
-    </div>`;
-  }).join("");
-
-  return `<div class="rt-note">Each circuit's in-game <b>Track Stats</b> spotlight one driver stat and one
-    component stat — a driver and loadout built around those two carry an edge there. Transcribed from the
-    in-game Track Stats screens (not covered by the source workbook). The "Best" lines are computed live from
-    your collection, same as Drivers/Loadouts above.</div>${cards}`;
 }
 
 /* ---------- Reward reference tables render ---------- */
@@ -1829,6 +2053,12 @@ app.addEventListener("click", (e) => {
   // Compare scope (drivers/components)
   const ck = e.target.closest("[data-ck]");
   if(ck){ if(cmpKind !== ck.dataset.ck){ cmpKind = ck.dataset.ck; cmpSort = {stat:"tot", dir:-1}; render(); } return; }
+  // Loadouts mode switch (By Attribute / By Track)
+  const lm = e.target.closest("[data-lm]");
+  if(lm){
+    if(loadoutMode !== lm.dataset.lm){ loadoutMode = lm.dataset.lm; saveLoadoutAttrs(); render(); }
+    return;
+  }
   // Suggested Loadouts attribute toggle
   const la = e.target.closest("[data-lattr]");
   if(la){
@@ -1849,6 +2079,32 @@ app.addEventListener("click", (e) => {
     if(cmpSort.stat === key) cmpSort.dir *= -1;
     else cmpSort = {stat:key, dir: key === "name" ? 1 : -1};
     render();
+    return;
+  }
+  // Boosts tab: New Boost form submit
+  const nbAdd = e.target.closest("[data-nb-add]");
+  if(nbAdd){
+    const panel = nbAdd.closest(".panel");
+    const name = panel.querySelector("[data-nb-name]").value.trim();
+    if(!name){ toast("Enter a name for the new Boost"); return; }
+    if(BOOSTS.some(b => b.n.toLowerCase() === name.toLowerCase())){
+      toast(`"${name}" is already a built-in Boost`);
+      return;
+    }
+    const b = {};
+    panel.querySelectorAll("[data-nb-attr]").forEach(inp => {
+      const v = Math.round(+inp.value || 0);
+      if(v) b[inp.dataset.nbAttr] = v;
+    });
+    if(!Object.keys(b).length){ toast("Set at least one stat value"); return; }
+    const existingIdx = customBoosts.findIndex(c => c.n.toLowerCase() === name.toLowerCase());
+    if(existingIdx >= 0) customBoosts[existingIdx] = {n:name, b};
+    else customBoosts.push({n:name, b});
+    saveCustomBoosts();
+    boostPicked = name;
+    saveBoostOwned();
+    render();
+    toast(`"${name}" added`);
     return;
   }
 
@@ -1884,6 +2140,21 @@ app.addEventListener("change", (e) => {
   input.value = Math.max(0, Math.floor(+input.value || 0));  // normalize display
 });
 
+// Boost quantity-owned edits (debounced persistence on change/blur).
+app.addEventListener("input", (e) => {
+  const input = e.target.closest('input[data-act="boostqty"]');
+  if(!input) return;
+  const row = input.closest("[data-boost]");
+  const qty = Math.max(0, Math.floor(+input.value || 0));
+  if(qty > 0) boostOwned[row.dataset.boost] = qty; else delete boostOwned[row.dataset.boost];
+  saveBoostOwned();
+});
+app.addEventListener("change", (e) => {
+  const input = e.target.closest('input[data-act="boostqty"]');
+  if(!input) return;
+  input.value = Math.max(0, Math.floor(+input.value || 0));  // normalize display
+});
+
 // Per-card "boosted" (+10%) toggle: persist + rebuild the card body.
 app.addEventListener("change", (e) => {
   const cb = e.target.closest('input[data-act="boost"]');
@@ -1899,6 +2170,24 @@ app.addEventListener("change", (e) => {
   if(!sel) return;
   if(sel.dataset.cb === "series") seriesFilter = sel.value;
   else if(sel.dataset.cb === "sort") sortBy = sel.value;
+  render();
+});
+
+// Loadouts "By Track" mode: track picker.
+app.addEventListener("change", (e) => {
+  const sel = e.target.closest("[data-trk-select]");
+  if(!sel) return;
+  loadoutTrack = sel.value;
+  saveLoadoutAttrs();
+  render();
+});
+
+// Boosts tab: boost picker.
+app.addEventListener("change", (e) => {
+  const sel = e.target.closest("[data-boost-select]");
+  if(!sel) return;
+  boostPicked = sel.value;
+  saveBoostOwned();
   render();
 });
 
@@ -2146,6 +2435,8 @@ load();
 loadSeason();
 loadBoosted();
 loadLoadoutAttrs();
+loadBoostOwned();
+loadCustomBoosts();
 render();
 
 // Register the service worker with a relative path (works under /<repo>/).
