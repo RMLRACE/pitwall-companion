@@ -426,16 +426,16 @@
   .boost-name{font-weight:800; font-size:14.5px}
   .boost-name .hint{font-size:11px; font-weight:600; color:var(--muted); text-transform:none; margin-left:6px}
 
-  /* New Boost form (Boosts tab) */
-  .nb-summary{
+  /* Collapsible panel (New Boost form, GP Event filter) */
+  .coll-summary{
     list-style:none; cursor:pointer; user-select:none; display:flex; align-items:center; gap:6px;
     margin:0; font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); font-weight:800;
   }
-  .nb-summary::-webkit-details-marker{display:none}
-  .nb-summary::before{content:"▸"; transition:transform .15s; flex:0 0 auto}
-  .nb-details[open]>.nb-summary::before{transform:rotate(90deg)}
-  .nb-summary .hint{margin-left:auto; text-transform:none; letter-spacing:0; font-weight:600; text-align:right}
-  .nb-details[open]>.nb-summary{margin-bottom:12px}
+  .coll-summary::-webkit-details-marker{display:none}
+  .coll-summary::before{content:"▸"; transition:transform .15s; flex:0 0 auto}
+  .coll-details[open]>.coll-summary::before{transform:rotate(90deg)}
+  .coll-summary .hint{margin-left:auto; text-transform:none; letter-spacing:0; font-weight:600; text-align:right}
+  .coll-details[open]>.coll-summary{margin-bottom:12px}
   .nb-name-field{margin-bottom:10px}
   .nb-name-field label{display:block; font-size:11px; font-weight:700; text-transform:uppercase;
     letter-spacing:.06em; color:var(--muted); margin-bottom:6px}
@@ -828,8 +828,8 @@ function boostsOwnedHTML(){
       <input id="nb-${esc(n)}" type="number" inputmode="numeric" step="1" placeholder="0" data-nb-attr="${esc(n)}">
     </div>`).join("");
 
-  const newBoostForm = `<details class="panel nb-details">
-    <summary class="nb-summary">New Boost<span class="hint">the game adds these faster than this list can track</span></summary>
+  const newBoostForm = `<details class="panel coll-details">
+    <summary class="coll-summary">New Boost<span class="hint">the game adds these faster than this list can track</span></summary>
     <div class="nb-name-field">
       <label for="nb-name">Name</label>
       <input id="nb-name" type="text" placeholder="e.g. Nova" data-nb-name>
@@ -864,6 +864,9 @@ let trackLoadoutAttrs = new Set(["Speed"]); // By Track mode: selected loadout-o
 let trackLoadoutAttrsFor = null;   // Which track name trackLoadoutAttrs currently applies to (resets on track change)
 let gpTier = "champion";          // Loadouts GP-event availability filter: "junior"|"challenger"|"contender"|"champion"
 let gpLegendary = false;          // Loadouts GP-event filter: whether Legendary drivers are allowed (event-specific in-game)
+let gpFilterOpen = false;         // Whether the GP Event collapsible panel is expanded — tracked explicitly
+                                   // since every render() rebuilds the DOM, which would otherwise reset native
+                                   // <details> open state on every tier/legendary click inside it.
 let boostOwned = {};              // { boostName: quantity } — how many of each consumable Boost you own
 let customBoosts = [];            // [{n, b:{stat:val,...}}] user-added Boosts, alongside the built-in BOOSTS
 let boostPicked = null;           // Boosts tab: name of the boost currently shown in the picker
@@ -1747,18 +1750,19 @@ function loadoutCardHTML(title, hint, hotStats, lo){
   </div>`;
 }
 
-// GP Event availability filter bar — shared by both Loadouts modes.
+// GP Event availability filter bar — shared by both Loadouts modes. Collapsed by default;
+// the current tier stays visible in the summary so it doesn't have to be expanded to check.
 function gpFilterBarHTML(){
   const tierBtns = GP_TIERS.map(t =>
     `<button type="button" data-gp-tier="${t.k}" aria-pressed="${gpTier===t.k}">${esc(t.label)}</button>`).join("");
-  return `<div class="panel gp-filter">
-    <h3>GP Event availability<span class="hint">${esc(GP_TIERS.find(t=>t.k===gpTier).label)}</span></h3>
+  return `<details class="panel coll-details gp-filter"${gpFilterOpen?' open':''}>
+    <summary class="coll-summary" data-gp-toggle>GP Event<span class="hint">${esc(GP_TIERS.find(t=>t.k===gpTier).label)}</span></summary>
     <div class="lo-attr-bar">${tierBtns}</div>
     <label class="gp-legendary-tog">
       <input type="checkbox" data-gp-legendary ${gpLegendary?'checked':''}>
       <span>Legendary drivers allowed</span>
     </label>
-  </div>`;
+  </details>`;
 }
 
 function suggestLoadoutsHTML(){
@@ -2216,6 +2220,15 @@ app.addEventListener("click", (e) => {
       trackLoadoutAttrs.add(name);
     }
     saveLoadoutAttrs();
+    render();
+    return;
+  }
+  // Loadouts: GP Event collapsible toggle — preventDefault + own state so the panel's
+  // open/closed state survives the render() a tier/legendary click inside it triggers.
+  const gpToggle = e.target.closest("[data-gp-toggle]");
+  if(gpToggle){
+    e.preventDefault();
+    gpFilterOpen = !gpFilterOpen;
     render();
     return;
   }
