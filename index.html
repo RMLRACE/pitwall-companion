@@ -440,7 +440,7 @@
   .nb-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px}
   .nb-field label{display:block; font-size:10px; color:var(--muted); text-transform:uppercase;
     letter-spacing:.05em; margin-bottom:4px}
-  .nb-field input{width:100%; text-align:right; background:var(--surface-2); color:var(--text);
+  .nb-field input, .nb-field select{width:100%; text-align:right; background:var(--surface-2); color:var(--text);
     border:1px solid var(--line); border-radius:10px; padding:9px 10px; min-height:var(--tap)}
   .nb-add{width:100%; min-height:var(--tap); border:0; border-radius:10px; background:var(--red);
     color:var(--red-ink); font-weight:800; font-size:14px}
@@ -540,6 +540,11 @@ const CUSTOM_BOOSTS_SCHEMA = 1;
 // and reloads instead of resetting to "All" every time.
 const GROUP_FILTER_KEY = "f1sheet.groupFilter.v1";
 const GROUP_FILTER_SCHEMA = 1;
+
+// User-added custom Drivers (the game unlocks new ones faster than the community sheet
+// gets updated) — own namespaced, schema-guarded key. Mirrors CUSTOM_BOOSTS_KEY above.
+const CUSTOM_DRIVERS_KEY = "f1sheet.customDrivers.v1";
+const CUSTOM_DRIVERS_SCHEMA = 1;
 
 /* ---------- Reward & payout reference tables (from workbook "CCData",
    identical in v1.0 and v1.1) ---------- */
@@ -874,6 +879,8 @@ let boostPicked = null;           // Boosts tab: name of the boost currently sho
 let driversAttrIdx = 0;           // Tools > Drivers: selected attribute (index into DRIVER_STAT_LABELS)
 let driversPick1 = null;          // Tools > Drivers: explicit driver id for comparison slot 1, or null for auto rank #1
 let driversPick2 = null;          // Tools > Drivers: explicit driver id for comparison slot 2, or null for auto rank #2
+let customDrivers = [];           // [{name, rarity, level, amount, vals:[5 stats]}] user-added Drivers,
+                                   // alongside the built-in DEFAULT.drivers/REF entries
 
 function load(){
   try{
@@ -1034,6 +1041,37 @@ function saveCustomBoosts(){
 // (the picker, and the Suggested Boost ranking) so custom entries behave identically.
 function allBoosts(){ return BOOSTS.concat(customBoosts); }
 
+/* ---------- Custom (user-added) Drivers ---------- */
+function loadCustomDrivers(){
+  customDrivers = [];
+  try{
+    const raw = localStorage.getItem(CUSTOM_DRIVERS_KEY);
+    if(!raw) return;
+    const data = JSON.parse(raw);
+    if(data && typeof data === "object" && data.schema === CUSTOM_DRIVERS_SCHEMA && Array.isArray(data.drivers)){
+      customDrivers = data.drivers;
+    }
+  }catch(e){ /* corrupt storage -> none custom */ }
+}
+function saveCustomDrivers(){
+  try{
+    localStorage.setItem(CUSTOM_DRIVERS_KEY, JSON.stringify({
+      schema:CUSTOM_DRIVERS_SCHEMA, drivers:customDrivers, savedAt:new Date().toISOString()
+    }));
+  }catch(e){ toast("Couldn't save — storage full?"); }
+}
+// Synthesize each custom driver's REF entry and merge it straight into REF -- REF is read
+// live everywhere (statsAt/seriesOf/collectionBar/etc, see synthesizeDriverRef's comment),
+// so once merged a custom driver behaves identically to a built-in one with no further
+// code changes needed anywhere else in the app. Pure function of customDrivers -- safe to
+// re-run after every add.
+function applyCustomDrivers(){
+  const ids = new Set(customDrivers.map(c => idFor("drivers", c.rarity, c)));
+  for(const c of customDrivers){
+    REF[idFor("drivers", c.rarity, c)] = synthesizeDriverRef(c.rarity, c.level, c.vals, ids);
+  }
+}
+
 /* ---------- Season computation (mirrors the workbook's CC scoring) ---------- */
 function ratio(cur, tgt){ if(!(tgt > 0)) return 0; return clamp(cur / tgt, 0, 1); }
 
@@ -1129,7 +1167,12 @@ function groupsFor(tabName){
   return tabName === "drivers" ? DRIVER_GROUPS : COMPONENT_GROUPS;
 }
 function seedList(tabName, groupName){
-  return DEFAULT[tabName][groupName] || [];
+  const base = DEFAULT[tabName][groupName] || [];
+  if(tabName !== "drivers") return base;
+  const custom = customDrivers
+    .filter(c => c.rarity === groupName)
+    .map(c => ({name:c.name, rarity:c.rarity, level:c.level, amount:c.amount}));
+  return base.concat(custom);
 }
 
 /* ---------- Rendering ---------- */
@@ -1157,7 +1200,7 @@ function pct(card){
 /* ----- Reference-data accessors + upgrade math ----- */
 // Coins to go from `level` to `level+1` (null if unknown / at data cap).
 function coinToNext(id, level){
-  const r = REF[id]; if(!r) return null;
+  const r = REF[id]; if(!r || !r.cu || !r.cu.length) return null;
   return (level >= 1 && level < r.cu.length) ? r.cu[level] : null;
 }
 // Cards remaining to reach cap from current level, minus cards already banked.
@@ -1168,7 +1211,7 @@ function cardsToMax(level, cap, amount){
 }
 // Coins to reach cap from current level (null if this card has no cost data).
 function coinsToMax(id, level, cap){
-  const r = REF[id]; if(!r) return null;
+  const r = REF[id]; if(!r || !r.cu || !r.cu.length) return null;
   let sum = 0;
   for(let k = level; k < cap && k < r.cu.length; k++) sum += (r.cu[k] || 0);
   return sum;
@@ -1192,12 +1235,63 @@ function surplusText(tr){
 // Stats/Total/Team at a given level (null if none).
 function statsAt(id, level){
   const r = REF[id]; if(!r || level < 1 || level > r.s.length) return null;
-  return { names:r.n, vals:r.s[level-1], total:r.tot[level-1], team:r.team[level-1] };
+  const row = r.s[level-1];
+  if(!row) return null;    // sparse entry (e.g. a custom driver known at only one level)
+  return { names:r.n, vals:row, total:r.tot[level-1], team:r.team[level-1] };
 }
 // Data cap = highest level with published stats (may be below the rarity CAP).
 function dataCap(id){ const r = REF[id]; return r ? r.s.length : 0; }
 // Unlock series for a card (0/null = not via series progression, e.g. Legendary).
 function seriesOf(id){ const r = REF[id]; return r && r.sr ? r.sr : null; }
+
+// Driver stat key order used by every driver REF entry's `n` field (fixed, matches
+// DRIVER_STAT_LABELS below).
+const DRIVER_STAT_KEYS = ["overtaking","defending","qualifying","raceStart","tyreUse"];
+
+// Build a REF-shaped entry for a user-added driver from one screenshot: a rarity, the
+// level it was taken at, and that level's 5 stat values (in DRIVER_STAT_KEYS order).
+// Drivers within a rarity cluster into "cohorts" that all share one identical per-level
+// value SET, each driver just assigning a different stat to each value (verified against
+// the built-in sheet data — see BATCH 4 plan notes). So if an existing built-in driver's
+// stats at this same level are a permutation of the same 5 values, we can clone that
+// cohort's entire level 1..cap stat/cost curve and re-apply this driver's own value->stat
+// assignment to every level, for a fully-featured entry from just one level's numbers.
+// Falls back to a single known level (rest left as sparse holes -- statsAt() already
+// treats those as "no data", same as an incompletely-published component) when no
+// existing cohort matches.
+function synthesizeDriverRef(rarity, level, vals, excludeIds){
+  const sortedVals = [...vals].sort((a,b) => a - b);
+  // rank[i] = where vals[i] sits in the sorted order (0..4) -- the permutation to re-apply
+  // to every level of a matched cohort's own (identically-ordered) sorted value rows.
+  const rank = vals.map(v => sortedVals.indexOf(v));
+
+  let match = null;
+  for(const id in REF){
+    if(id[0] !== "d" || (excludeIds && excludeIds.has(id))) continue;
+    const r = REF[id];
+    if(r.r !== rarity || level > r.s.length || !r.s[level-1]) continue;
+    const cand = [...r.s[level-1]].sort((a,b) => a - b);
+    if(cand.length === 5 && cand.every((v,i) => v === sortedVals[i])){ match = r; break; }
+  }
+
+  if(match){
+    const s = match.s.map(row => {
+      const sortedRow = [...row].sort((a,b) => a - b);
+      return rank.map(rk => sortedRow[rk]);
+    });
+    return { r:rarity, g:rarity, k:"d", n:DRIVER_STAT_KEYS, s,
+      tot:match.tot.slice(), team:match.team.slice(),
+      cu:match.cu.slice(), ct:match.ct.slice(), ku:match.ku.slice(), kt:match.kt.slice(),
+      sr:null };
+  }
+
+  const total = vals.reduce((a,b) => a + b, 0);
+  const s = new Array(level).fill(null); s[level-1] = vals.slice();
+  const tot = new Array(level).fill(null); tot[level-1] = total;
+  const team = new Array(level).fill(null); team[level-1] = total;
+  return { r:rarity, g:rarity, k:"d", n:DRIVER_STAT_KEYS, s, tot, team,
+    cu:[], ct:[], ku:[], kt:[], sr:null };
+}
 
 /* GP Event availability (Loadouts only): in-game GP Events cap eligible assets by Series
    depending on difficulty — Junior/Challenger/Contender/Champion — and separately gate
@@ -1462,9 +1556,10 @@ function render(){
   }
 
   const bar = collectionBar();
-  app.innerHTML = summaryHTML() + bar + html + toolbarHTML();
+  const addForm = tab === "drivers" ? addDriverFormHTML() : "";
+  app.innerHTML = summaryHTML() + bar + html + addForm + toolbarHTML();
   if(total === 0){
-    app.innerHTML = summaryHTML() + bar + `<div class="empty">No cards match your filters.</div>` + toolbarHTML();
+    app.innerHTML = summaryHTML() + bar + `<div class="empty">No cards match your filters.</div>` + addForm + toolbarHTML();
   }
 }
 
@@ -2254,6 +2349,35 @@ function filterRewards(q){
   }else if(empty){ empty.style.display = "none"; }
 }
 
+// "Add a new driver" collapsible on the Drivers tab -- lets you add a driver the
+// community sheet doesn't have yet, straight from an in-game screenshot. Mirrors the
+// Boosts tab's "New Boost" form (see boostsOwnedHTML) but collects a rarity + level +
+// 5 stats instead of a name + flat bonuses, since drivers need level-by-level stat data
+// (see synthesizeDriverRef for how the rest of the level curve gets derived).
+function addDriverFormHTML(){
+  const rarityOpts = DRIVER_GROUPS.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join("");
+  const fields = [
+    `<div class="nb-field"><label for="nd-rarity">Rarity</label>
+      <select id="nd-rarity" data-nd-rarity>${rarityOpts}</select></div>`,
+    `<div class="nb-field"><label for="nd-level">Level</label>
+      <input id="nd-level" type="number" inputmode="numeric" min="1" step="1" value="1" data-nd-level></div>`,
+    `<div class="nb-field"><label for="nd-amount">Cards owned</label>
+      <input id="nd-amount" type="number" inputmode="numeric" min="0" step="1" placeholder="0" data-nd-amount></div>`,
+    ...DRIVER_STAT_LABELS.map((label,i) => `
+      <div class="nb-field"><label for="nd-stat-${i}">${esc(label)}</label>
+        <input id="nd-stat-${i}" type="number" inputmode="numeric" step="1" placeholder="0" data-nd-stat="${i}"></div>`)
+  ].join("");
+  return `<details class="panel coll-details">
+    <summary class="coll-summary">Add a new driver<span class="hint">not on the sheet yet? Add one from a screenshot</span></summary>
+    <div class="nb-name-field">
+      <label for="nd-name">Name</label>
+      <input id="nd-name" type="text" placeholder="e.g. Herbert" data-nd-name>
+    </div>
+    <div class="nb-grid">${fields}</div>
+    <button type="button" class="nb-add" data-nd-add>Add Driver</button>
+  </details>`;
+}
+
 function toolbarHTML(){
   return `<div class="toolbar">
     <button data-tool="export" type="button">⬇︎ Export</button>
@@ -2348,6 +2472,37 @@ app.addEventListener("click", (e) => {
     saveCustomBoosts();
     boostPicked = name;
     saveBoostOwned();
+    render();
+    toast(`"${name}" added`);
+    return;
+  }
+  // Drivers tab: Add a new driver form submit
+  const ndAdd = e.target.closest("[data-nd-add]");
+  if(ndAdd){
+    const panel = ndAdd.closest(".panel");
+    const name = panel.querySelector("[data-nd-name]").value.trim();
+    if(!name){ toast("Enter a name for the new driver"); return; }
+    const rarity = panel.querySelector("[data-nd-rarity]").value;
+    if((DEFAULT.drivers[rarity] || []).some(s => s.name.toLowerCase() === name.toLowerCase())){
+      toast(`"${name}" is already a built-in ${rarity} driver`);
+      return;
+    }
+    const statInputs = [...panel.querySelectorAll("[data-nd-stat]")]
+      .sort((a,b) => +a.dataset.ndStat - +b.dataset.ndStat);
+    if(statInputs.some(inp => inp.value.trim() === "")){
+      toast("Fill in all 5 stat values from the screenshot");
+      return;
+    }
+    const vals = statInputs.map(inp => Math.round(+inp.value || 0));
+    const level = Math.max(1, Math.round(+panel.querySelector("[data-nd-level]").value || 1));
+    const amount = Math.max(0, Math.round(+panel.querySelector("[data-nd-amount]").value || 0));
+    const entry = {name, rarity, level, amount, vals};
+    const existingIdx = customDrivers.findIndex(c =>
+      c.rarity === rarity && c.name.toLowerCase() === name.toLowerCase());
+    if(existingIdx >= 0) customDrivers[existingIdx] = entry;
+    else customDrivers.push(entry);
+    saveCustomDrivers();
+    applyCustomDrivers();
     render();
     toast(`"${name}" added`);
     return;
@@ -2703,6 +2858,8 @@ loadLoadoutAttrs();
 loadBoostOwned();
 loadCustomBoosts();
 loadGroupFilter();
+loadCustomDrivers();
+applyCustomDrivers();
 render();
 
 // Register the service worker with a relative path (works under /<repo>/).
