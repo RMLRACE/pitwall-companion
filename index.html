@@ -335,19 +335,6 @@
   .tag-boost{display:inline-block; margin-left:6px; font-size:9px; font-weight:900; color:var(--gold);
     border:1px solid var(--gold); border-radius:999px; padding:1px 6px; vertical-align:middle}
 
-  /* suggested drivers */
-  .sd-panel{padding:12px}
-  .sd-panel h3{margin:0 0 8px; font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); font-weight:800}
-  .sd-row{display:flex; align-items:center; gap:10px; padding:7px 0; border-top:1px solid var(--line)}
-  .sd-row:first-of-type{border-top:0}
-  .sd-rank{flex:0 0 auto; width:22px; height:22px; border-radius:6px; background:var(--surface-2);
-    display:grid; place-items:center; font-size:12px; font-weight:900; color:var(--muted)}
-  .sd-row:first-of-type .sd-rank{background:var(--gold); color:#0b0f1a}
-  .sd-main{flex:1 1 auto; min-width:0; display:flex; flex-direction:column}
-  .sd-name{font-weight:700; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-  .sd-sub{font-size:11px; color:var(--muted)}
-  .sd-val{flex:0 0 auto; font-weight:800; font-size:16px; text-align:right; font-variant-numeric:tabular-nums}
-
   /* if-upgraded preview inside card details */
   .upg{margin:6px 0 2px; padding:8px; background:var(--surface-2); border:1px solid var(--line); border-radius:10px}
   .upg-h{font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--accent); margin-bottom:6px}
@@ -396,6 +383,7 @@
     appearance:none; -webkit-appearance:none;
     background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%239aa6c2" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>');
     background-repeat:no-repeat; background-position:right 12px center; background-size:18px}
+  .trk-pick-row{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px}
   .trk-stat-table{margin-bottom:10px; padding:12px}
   .trk-stat-headrow{display:grid; grid-template-columns:1fr auto 1fr; gap:8px; align-items:end;
     margin-bottom:10px; padding-bottom:10px; border-bottom:1px solid var(--line)}
@@ -883,6 +871,9 @@ let gpFilterOpen = false;         // Whether the GP Event collapsible panel is e
 let boostOwned = {};              // { boostName: quantity } — how many of each consumable Boost you own
 let customBoosts = [];            // [{n, b:{stat:val,...}}] user-added Boosts, alongside the built-in BOOSTS
 let boostPicked = null;           // Boosts tab: name of the boost currently shown in the picker
+let driversAttrIdx = 0;           // Tools > Drivers: selected attribute (index into DRIVER_STAT_LABELS)
+let driversPick1 = null;          // Tools > Drivers: explicit driver id for comparison slot 1, or null for auto rank #1
+let driversPick2 = null;          // Tools > Drivers: explicit driver id for comparison slot 2, or null for auto rank #2
 
 function load(){
   try{
@@ -1700,32 +1691,50 @@ function suggestDriversHTML(q){
   if(!drivers.length){
     return `<div class="empty">No leveled drivers${q?" match your search":" yet"}. Set some driver levels on the Drivers tab.</div>`;
   }
-  const rows = drivers.map(c => {
+  const dsIdx = driversAttrIdx;
+  const dsLabel = DRIVER_STAT_LABELS[dsIdx];
+
+  const attrSelect = `<div class="trk-select-wrap">
+    <label for="driversAttrSel">Attribute</label>
+    <select class="trk-select" id="driversAttrSel" data-drivers-attr-select>${
+      DRIVER_STAT_LABELS.map((label,i) => `<option value="${i}"${i===dsIdx?' selected':''}>${esc(label)}</option>`).join("")
+    }</select>
+  </div>`;
+
+  const ranked = drivers.map(c => {
     const st = statsView(c.id, c.level, isBoosted(c.id));
     const up = c.level < c.cap ? statsView(c.id, c.level + 1, isBoosted(c.id)) : null;
     return { c, st, up };
-  });
-  const panels = DRIVER_STAT_LABELS.map((label, i) => {
-    const ranked = rows.slice().sort((a,b) => b.st.vals[i] - a.st.vals[i]).slice(0, 6);
-    const list = ranked.map((r, idx) => {
-      const v = r.st.vals[i];
-      const nextV = r.up ? r.up.vals[i] : null;
-      const d = nextV != null ? nextV - v : 0;
-      const boost = isBoosted(r.c.id) ? `<span class="tag-boost">+10%</span>` : "";
-      return `<div class="sd-row">
-        <span class="sd-rank">${idx+1}</span>
-        <span class="sd-main">
-          <span class="sd-name">${esc(r.c.name)}${boost}</span>
-          <span class="sd-sub">${esc(r.c.rarity)} · Lv ${r.c.level} · Tot ${fmt(r.st.total)} / Team ${fmt(r.st.team)}</span>
-        </span>
-        <span class="sd-val">${fmtNum(v)}${nextV!=null && d!==0 ? `<span class="delta up">→${fmtNum(nextV)}</span>` : ""}</span>
-      </div>`;
-    }).join("");
-    return `<div class="panel sd-panel"><h3>${esc(label)}</h3>${list}</div>`;
-  }).join("");
-  return `<div class="rt-note">Your best drivers for each attribute, at their current level. The
-    <span class="delta up">→</span> value is the stat one level higher. Toggle “Boosted +10%” on a
-    driver card to see its boosted numbers ranked here.</div>${panels}`;
+  }).sort((a,b) => b.st.vals[dsIdx] - a.st.vals[dsIdx])
+    .map((r,i) => ({...r, rank: i + 1}));
+
+  const pickSelect = (elId, dataAttr, selectedId) => {
+    const opts = ranked.map(r =>
+      `<option value="${esc(r.c.id)}"${r.c.id===selectedId?' selected':''}>${r.rank}. ${esc(r.c.name)}</option>`
+    ).join("");
+    return `<div class="trk-select-wrap">
+      <label for="${elId}">Driver</label>
+      <select class="trk-select" id="${elId}" ${dataAttr}>${opts}</select>
+    </div>`;
+  };
+
+  let body;
+  if(ranked.length === 1){
+    body = driverStatTableHTML(ranked, dsIdx, dsLabel);
+  }else{
+    const entry1 = ranked.find(r => r.c.id === driversPick1) || ranked[0];
+    const entry2 = ranked.find(r => r.c.id === driversPick2 && r.c.id !== entry1.c.id) || ranked.find(r => r.c.id !== entry1.c.id) || ranked[1];
+    const pickers = `<div class="trk-pick-row">
+      ${pickSelect("driversPick1Sel", "data-drivers-pick1", entry1.c.id)}
+      ${pickSelect("driversPick2Sel", "data-drivers-pick2", entry2.c.id)}
+    </div>`;
+    body = pickers + driverStatTableHTML([entry1, entry2], dsIdx, dsLabel);
+  }
+
+  return `<div class="rt-note">Pick an attribute to see your top drivers for it, at their current level. The
+    <span class="delta up">→</span> value is the stat one level higher. Both drivers default to the top 2 for
+    the attribute but can be swapped to any owned driver — the dropdown lists them best-first. Toggle
+    “Boosted +10%” on a driver card to see its boosted numbers here.</div>${attrSelect}${body}`;
 }
 
 /* ----- 4) Suggested Loadouts: best owned component per category, for the selected attribute(s) ----- */
@@ -1864,6 +1873,46 @@ const TRACKS = [
 // In-game wording is "Tyre Management"; DRIVER_STAT_LABELS uses "Tyre Mgmt" for lookup.
 const TRACK_DS_LABEL = {"Tyre Mgmt":"Tyre Management"};
 
+// Side-by-side 5-stat comparison table for up to 2 drivers, matching the in-game "Team
+// Loadouts" screen. `entries` are {c, st, up, rank} objects (rank = 1-based position in
+// the full ranking for `dsIdx`, used for the "Best X · #N" head label — not necessarily
+// contiguous, since callers may let the user override a slot to any driver). `dsIdx`/
+// `dsLabel` pick which stat row gets visually emphasized. Shared by Loadouts → By Track
+// and Tools → Drivers so both stay visually/behaviorally identical.
+function driverStatTableHTML(entries, dsIdx, dsLabel){
+  const headCells = entries.map(r => {
+    const boost = isBoosted(r.c.id) ? `<span class="tag-boost">+10%</span>` : "";
+    return `<div class="trk-stat-head">
+      <div class="trk-rank">Best ${esc(dsLabel)} · #${r.rank}</div>
+      <div class="trk-dname">${esc(r.c.name)}${boost}</div>
+      <div class="trk-dsub">${esc(r.c.rarity)} · Lv ${r.c.level} · Tot ${fmt(r.st.total)} / Team ${fmt(r.st.team)}</div>
+    </div>`;
+  });
+  while(headCells.length < 2) headCells.push(`<div class="trk-stat-head"></div>`);
+  const head = `${headCells[0]}<div class="trk-stat-head-spacer"></div>${headCells[1]}`;
+
+  const rows = DRIVER_STAT_LABELS.map((label, i) => {
+    const cells = entries.map(r => {
+      const v = r.st.vals[i];
+      const nextV = r.up ? r.up.vals[i] : null;
+      return `<div class="trk-stat-val">${fmtNum(v)}${nextV!=null?`<span class="delta up">→${fmtNum(nextV)}</span>`:""}</div>`;
+    });
+    // With only one owned/eligible driver, still show a single value column plus an
+    // empty placeholder so the 3-column grid layout stays intact.
+    while(cells.length < 2) cells.push(`<div class="trk-stat-val">—</div>`);
+    return `<div class="trk-stat-row${i===dsIdx?' hot':''}">
+      ${cells[0]}
+      <div class="trk-stat-label">${esc(label)}</div>
+      ${cells[1]}
+    </div>`;
+  }).join("");
+
+  return `<div class="panel trk-stat-table">
+    <div class="trk-stat-headrow">${head}</div>
+    ${rows}
+  </div>`;
+}
+
 function trackSpecHTML(){
   if(!TRACKS.some(t => t.n === loadoutTrack)) loadoutTrack = TRACKS[0].n;
   const track = TRACKS.find(t => t.n === loadoutTrack);
@@ -1906,39 +1955,10 @@ function trackSpecHTML(){
       const st = statsView(c.id, c.level, isBoosted(c.id));
       const up = c.level < c.cap ? statsView(c.id, c.level + 1, isBoosted(c.id)) : null;
       return {c, st, up};
-    }).sort((a,b) => b.st.vals[dsIdx] - a.st.vals[dsIdx]).slice(0, 2);
-
-    const headCells = ranked.map((r, idx) => {
-      const boost = isBoosted(r.c.id) ? `<span class="tag-boost">+10%</span>` : "";
-      return `<div class="trk-stat-head">
-        <div class="trk-rank">Best ${esc(dsLabel)} · #${idx+1}</div>
-        <div class="trk-dname">${esc(r.c.name)}${boost}</div>
-        <div class="trk-dsub">${esc(r.c.rarity)} · Lv ${r.c.level} · Tot ${fmt(r.st.total)} / Team ${fmt(r.st.team)}</div>
-      </div>`;
-    });
-    while(headCells.length < 2) headCells.push(`<div class="trk-stat-head"></div>`);
-    const head = `${headCells[0]}<div class="trk-stat-head-spacer"></div>${headCells[1]}`;
-
-    const rows = DRIVER_STAT_LABELS.map((label, i) => {
-      const cells = ranked.map(r => {
-        const v = r.st.vals[i];
-        const nextV = r.up ? r.up.vals[i] : null;
-        return `<div class="trk-stat-val">${fmtNum(v)}${nextV!=null?`<span class="delta up">→${fmtNum(nextV)}</span>`:""}</div>`;
-      });
-      // With only one owned/eligible driver, still show a single value column plus an
-      // empty placeholder so the 3-column grid layout stays intact.
-      while(cells.length < 2) cells.push(`<div class="trk-stat-val">—</div>`);
-      return `<div class="trk-stat-row${i===dsIdx?' hot':''}">
-        ${cells[0]}
-        <div class="trk-stat-label">${esc(label)}</div>
-        ${cells[1]}
-      </div>`;
-    }).join("");
-
-    driversBlock = `<div class="panel trk-stat-table">
-      <div class="trk-stat-headrow">${head}</div>
-      ${rows}
-    </div>`;
+    }).sort((a,b) => b.st.vals[dsIdx] - a.st.vals[dsIdx])
+      .map((r, i) => ({...r, rank: i + 1}))
+      .slice(0, 2);
+    driversBlock = driverStatTableHTML(ranked, dsIdx, dsLabel);
   }
 
   // Suggested Boosts: rank owned boosts (qty > 0) by the driver stat first, the component
@@ -2423,6 +2443,16 @@ app.addEventListener("change", (e) => {
   boostPicked = sel.value;
   saveBoostOwned();
   render();
+});
+
+// Tools > Drivers: attribute + driver-comparison pickers.
+app.addEventListener("change", (e) => {
+  const attrSel = e.target.closest("[data-drivers-attr-select]");
+  if(attrSel){ driversAttrIdx = +attrSel.value; render(); return; }
+  const pick1 = e.target.closest("[data-drivers-pick1]");
+  if(pick1){ driversPick1 = pick1.value; render(); return; }
+  const pick2 = e.target.closest("[data-drivers-pick2]");
+  if(pick2){ driversPick2 = pick2.value; render(); return; }
 });
 
 /* ---------- Season inputs ---------- */
