@@ -445,6 +445,14 @@
   .nb-add{width:100%; min-height:var(--tap); border:0; border-radius:10px; background:var(--red);
     color:var(--red-ink); font-weight:800; font-size:14px}
   .nb-add:active{transform:scale(.98)}
+  .nd-scan-btn{width:100%; min-height:var(--tap); border:1px dashed var(--line); border-radius:10px;
+    background:var(--surface-2); color:var(--text); font-weight:700; font-size:13px; cursor:pointer; margin-bottom:8px}
+  .nd-scan-btn:active{transform:scale(.98)}
+  .nd-scan-btn:disabled{opacity:.5; cursor:not-allowed}
+  .nd-scan-status{font-size:11px; color:var(--muted); min-height:14px; margin:-2px 0 10px}
+  .nd-divider{display:flex; align-items:center; gap:8px; margin:2px 0 12px; font-size:10px;
+    text-transform:uppercase; letter-spacing:.06em; color:var(--muted)}
+  .nd-divider::before, .nd-divider::after{content:""; flex:1; height:1px; background:var(--line)}
 
   /* compare */
   .cmp-scope{display:flex; gap:6px; background:var(--surface); border:1px solid var(--line);
@@ -2369,6 +2377,10 @@ function addDriverFormHTML(){
   ].join("");
   return `<details class="panel coll-details">
     <summary class="coll-summary">Add a new driver<span class="hint">not on the sheet yet? Add one from a screenshot</span></summary>
+    <input id="nd-scan-input" type="file" accept="image/*" data-nd-scan-input hidden>
+    <button type="button" class="nd-scan-btn" data-nd-scan>📷 Scan a screenshot to fill this in</button>
+    <div class="nd-scan-status" data-nd-scan-status></div>
+    <div class="nd-divider">or enter manually</div>
     <div class="nb-name-field">
       <label for="nd-name">Name</label>
       <input id="nd-name" type="text" placeholder="e.g. Herbert" data-nd-name>
@@ -2476,6 +2488,12 @@ app.addEventListener("click", (e) => {
     toast(`"${name}" added`);
     return;
   }
+  // Drivers tab: "Scan a screenshot" opens the hidden file picker.
+  const ndScan = e.target.closest("[data-nd-scan]");
+  if(ndScan){
+    ndScan.closest(".panel").querySelector("[data-nd-scan-input]").click();
+    return;
+  }
   // Drivers tab: Add a new driver form submit
   const ndAdd = e.target.closest("[data-nd-add]");
   if(ndAdd){
@@ -2522,6 +2540,99 @@ app.addEventListener("click", (e) => {
     setOverride(card.dataset.id, +card.dataset.seedlevel, +card.dataset.seedamount, {level});
     updateCard(card);
   }
+});
+
+/* ---------- Drivers tab: scan a driver-card screenshot to pre-fill "Add a new driver" ----------
+ * OCR is loaded lazily (only once the user taps "Scan a screenshot") from a CDN, since this is
+ * an offline-first PWA and we don't want to ship a multi-MB OCR engine to everyone up front.
+ * The scan only ever pre-fills the existing manual form below -- it's never trusted blindly and
+ * never auto-submits, so a bad read just means the user edits a field before hitting Add Driver. */
+let tesseractLoadPromise = null;
+function loadTesseract(){
+  if(window.Tesseract) return Promise.resolve(window.Tesseract);
+  if(tesseractLoadPromise) return tesseractLoadPromise;
+  tesseractLoadPromise = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+    s.onload = () => window.Tesseract ? resolve(window.Tesseract) : reject(new Error("Tesseract failed to load"));
+    s.onerror = () => reject(new Error("Tesseract failed to load"));
+    document.head.appendChild(s);
+  });
+  return tesseractLoadPromise;
+}
+
+function parseDriverScreenshotText(text){
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const rarity = DRIVER_GROUPS.find(g => new RegExp(g, "i").test(text)) || null;
+
+  // One keyword regex per DRIVER_STAT_KEYS slot -- matches the card's on-screen labels
+  // even though those don't always match our short internal labels (e.g. "Tyre Mgmt").
+  const STAT_KEYWORDS = [/overtak/i, /defend/i, /qualif/i, /race\s*start/i, /tyre|tire/i];
+  const stats = STAT_KEYWORDS.map(kw => {
+    for(let i = 0; i < lines.length; i++){
+      if(!kw.test(lines[i])) continue;
+      const here = lines[i].match(/(\d{1,3})(?!.*\d)/); // trailing number on the label's own line
+      if(here) return +here[1];
+      for(let j = i + 1; j < Math.min(i + 3, lines.length); j++){
+        const next = lines[j].match(/^(\d{1,3})$/);
+        if(next) return +next[1];
+      }
+    }
+    return null;
+  });
+
+  const CHROME = /^(event availability|junior|amateur|pro|elite|collect|more to upgrade|current driver stats|stats at max level|assigned|legendary|epic|rare|common)/i;
+  const nameLines = [];
+  for(const line of lines){
+    if(rarity && new RegExp(rarity, "i").test(line)) break;
+    if(CHROME.test(line) || /^[\d/]+$/.test(line) || line.length < 2) continue;
+    nameLines.push(line);
+    if(nameLines.length === 2) break;
+  }
+  const name = nameLines
+    .map(w => /^[A-Z\s'-]+$/.test(w) ? w.replace(/\w\S*/g, t => t[0] + t.slice(1).toLowerCase()) : w)
+    .join(" ")
+    .trim();
+
+  return { name, rarity, stats };
+}
+
+app.addEventListener("change", (e) => {
+  const input = e.target.closest("[data-nd-scan-input]");
+  if(!input || !input.files || !input.files[0]) return;
+  const file = input.files[0];
+  const panel = input.closest(".panel");
+  const statusEl = panel.querySelector("[data-nd-scan-status]");
+  const btn = panel.querySelector("[data-nd-scan]");
+  btn.disabled = true;
+  statusEl.textContent = "Reading screenshot… (first scan downloads the OCR engine, ~2MB)";
+  loadTesseract()
+    .then(Tesseract => Tesseract.recognize(file, "eng"))
+    .then(({ data }) => {
+      const { name, rarity, stats } = parseDriverScreenshotText(data.text || "");
+      if(name) panel.querySelector("[data-nd-name]").value = name;
+      if(rarity) panel.querySelector("[data-nd-rarity]").value = rarity;
+      let statsFound = 0;
+      stats.forEach((v, i) => {
+        if(v == null) return;
+        statsFound++;
+        panel.querySelector(`[data-nd-stat="${i}"]`).value = v;
+      });
+      const found = [name && "name", rarity && "rarity", statsFound && `${statsFound}/5 stats`].filter(Boolean).join(", ");
+      statusEl.textContent = found
+        ? `Scanned: got ${found}. Check the fields below, then Add Driver.`
+        : "Couldn't read that screenshot -- fill in the fields manually.";
+    })
+    .catch((err) => {
+      console.error(err);
+      statusEl.textContent = navigator.onLine === false
+        ? "Scan needs an internet connection the first time -- fill in manually for now."
+        : "Couldn't scan that image -- fill in the fields manually.";
+    })
+    .finally(() => {
+      btn.disabled = false;
+      input.value = ""; // allow re-selecting the same file
+    });
 });
 
 // Card count edits (debounced persistence on change/blur).
