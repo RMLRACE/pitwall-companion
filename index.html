@@ -215,6 +215,40 @@
   }
   .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
 
+  /* ---------- Onboarding slideshow (first launch) ---------- */
+  .onb-overlay{
+    position:fixed; inset:0; z-index:60; background:rgba(6,9,16,.72); backdrop-filter:blur(4px);
+    display:flex; align-items:center; justify-content:center; padding:20px;
+    padding-top:calc(20px + var(--safe-t)); padding-bottom:calc(20px + var(--safe-b));
+  }
+  @media (prefers-color-scheme: light){ .onb-overlay{background:rgba(20,26,41,.55)} }
+  .onb-card{
+    background:var(--surface); border:1px solid var(--line); border-radius:20px;
+    max-width:400px; width:100%; padding:28px 22px 20px; text-align:center;
+    display:flex; flex-direction:column; align-items:center; gap:14px;
+  }
+  .onb-icon{
+    width:60px; height:60px; display:grid; place-items:center;
+    background:var(--surface-2); border-radius:16px; color:var(--accent); flex:0 0 auto;
+  }
+  .onb-icon svg{width:32px; height:32px}
+  .onb-title{font-size:19px; font-weight:800; margin:0}
+  .onb-body{font-size:14px; color:var(--muted); line-height:1.5; margin:0}
+  .onb-dots{display:flex; justify-content:center; gap:6px; margin-top:2px}
+  .onb-dot{width:7px; height:7px; border-radius:50%; background:var(--line); flex:0 0 auto}
+  .onb-dot.active{background:var(--accent); width:18px; border-radius:4px; transition:width .2s}
+  .onb-nav{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:6px; width:100%}
+  .onb-skip, .onb-back{
+    color:var(--muted); font-size:13px; font-weight:700; background:none; border:0;
+    padding:8px; min-width:56px;
+  }
+  .onb-back{visibility:hidden; text-align:left}
+  .onb-back.show{visibility:visible}
+  .onb-next{
+    background:var(--red); color:var(--red-ink); border:0; border-radius:999px;
+    padding:10px 22px; font-weight:800; min-height:var(--tap);
+  }
+
   /* ---------- Season dashboard ---------- */
   .season{display:flex; flex-direction:column; gap:12px; margin-top:12px}
   .panel{
@@ -496,6 +530,8 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<div class="onb-overlay" id="onboarding" role="dialog" aria-modal="true" aria-label="Feature tour" hidden style="display:none"></div>
+
 <input type="file" id="importFile" accept="application/json,.json" hidden>
 
 <script>
@@ -545,6 +581,11 @@ const GROUP_FILTER_SCHEMA = 1;
 // gets updated) — own namespaced, schema-guarded key. Mirrors CUSTOM_BOOSTS_KEY above.
 const CUSTOM_DRIVERS_KEY = "f1sheet.customDrivers.v1";
 const CUSTOM_DRIVERS_SCHEMA = 1;
+
+// Whether the first-launch feature-tour slideshow has been dismissed — own
+// namespaced, schema-guarded key, same convention as the others above.
+const ONBOARDING_KEY = "f1sheet.onboarding.v1";
+const ONBOARDING_SCHEMA = 1;
 
 /* ---------- Reward & payout reference tables (from workbook "CCData",
    identical in v1.0 and v1.1) ---------- */
@@ -1071,6 +1112,97 @@ function applyCustomDrivers(){
     REF[idFor("drivers", c.rarity, c)] = synthesizeDriverRef(c.rarity, c.level, c.vals, ids);
   }
 }
+
+/* ---------- Onboarding: first-launch feature-tour slideshow ---------- */
+let onboardingSeen = false;   // whether it's already been dismissed on this device
+let onboardingActive = false; // currently showing
+let onboardingSlide = 0;
+
+function loadOnboardingSeen(){
+  onboardingSeen = false;
+  try{
+    const raw = localStorage.getItem(ONBOARDING_KEY);
+    if(!raw) return;
+    const data = JSON.parse(raw);
+    if(data && data.schema === ONBOARDING_SCHEMA && data.seen === true) onboardingSeen = true;
+  }catch(e){ /* corrupt storage -> show the tour again, harmless */ }
+}
+function saveOnboardingSeen(){
+  try{
+    localStorage.setItem(ONBOARDING_KEY, JSON.stringify({
+      schema:ONBOARDING_SCHEMA, seen:true, savedAt:new Date().toISOString()
+    }));
+  }catch(e){ /* storage full — not worth a toast for a one-time dismiss */ }
+}
+
+const ONBOARDING_SLIDES = [
+  { title:"Welcome to PitWall Companion",
+    body:"A quick tour of what's here — an offline tracker for your F1 Clash collection. Everything stays on this device.",
+    icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V4a1 1 0 0 1 1-1c3 0 3 2 6 2s3-2 6-2a1 1 0 0 1 1 1v9c0 1-1 1-1 1-3 0-3-2-6-2s-3 2-6 2"/></svg>' },
+  { title:"Drivers &amp; Parts",
+    body:"Track every card's level and count. Search by name, filter by rarity or category, and see your collection's totals at a glance.",
+    icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="13" height="10" rx="2"/><rect x="8" y="9" width="13" height="10" rx="2"/></svg>' },
+  { title:"Season",
+    body:"Follow your Weekly League and Season Pass progress with a live countdown and a CC-score projection built from your own numbers.",
+    icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>' },
+  { title:"Tools",
+    body:"Loadouts (by attribute or by circuit), a side-by-side Compare table for Drivers/Parts/Boosts, and a Boosts tracker with Suggested Boost picks.",
+    icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.1 2.1-2-2z"/></svg>' },
+  { title:"Rewards reference",
+    body:"Look up payout tables for race medals, Weekly League standings, Series unlocks, and coin milestones anytime.",
+    icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v4a4 4 0 0 1-8 0V4z"/><path d="M8 5H5a3 3 0 0 0 3 3M16 5h3a3 3 0 0 1-3 3"/><path d="M12 12v3M9 20h6M10 20v-2a2 2 0 0 1 4 0v2"/></svg>' },
+  { title:"You're set",
+    body:"Nothing here is ever uploaded — it's all local to this device. Tap Install above to add PitWall Companion to your home screen.",
+    icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>' }
+];
+
+function onboardingHTML(){
+  const n = ONBOARDING_SLIDES.length;
+  const s = ONBOARDING_SLIDES[onboardingSlide];
+  const isLast = onboardingSlide === n - 1;
+  const dots = ONBOARDING_SLIDES.map((_, i) =>
+    `<span class="onb-dot${i === onboardingSlide ? ' active' : ''}"></span>`).join("");
+  return `<div class="onb-card">
+    <div class="onb-icon">${s.icon}</div>
+    <h2 class="onb-title">${s.title}</h2>
+    <p class="onb-body">${esc(s.body)}</p>
+    <div class="onb-dots">${dots}</div>
+    <div class="onb-nav">
+      <button type="button" class="onb-back${onboardingSlide > 0 ? ' show' : ''}" data-onb-back>Back</button>
+      ${isLast ? '' : '<button type="button" class="onb-skip">Skip</button>'}
+      <button type="button" class="onb-next" data-onb-next>${isLast ? 'Get Started' : 'Next'}</button>
+    </div>
+  </div>`;
+}
+
+function renderOnboarding(){
+  const el = document.getElementById("onboarding");
+  // .onb-overlay's own `display:flex` and the `[hidden]` UA rule are equal specificity,
+  // so toggling the `hidden` attribute alone doesn't reliably hide it — set display inline.
+  if(!onboardingActive){ el.hidden = true; el.style.display = "none"; el.innerHTML = ""; return; }
+  el.hidden = false;
+  el.style.display = "flex";
+  el.innerHTML = onboardingHTML();
+}
+
+function closeOnboarding(){
+  onboardingActive = false;
+  saveOnboardingSeen();
+  renderOnboarding();
+}
+
+document.getElementById("onboarding").addEventListener("click", (e) => {
+  if(e.target.closest("[data-onb-next]")){
+    if(onboardingSlide === ONBOARDING_SLIDES.length - 1) closeOnboarding();
+    else { onboardingSlide++; renderOnboarding(); }
+    return;
+  }
+  if(e.target.closest("[data-onb-back]")){
+    if(onboardingSlide > 0){ onboardingSlide--; renderOnboarding(); }
+    return;
+  }
+  if(e.target.closest(".onb-skip")) closeOnboarding();
+});
 
 /* ---------- Season computation (mirrors the workbook's CC scoring) ---------- */
 function ratio(cur, tgt){ if(!(tgt > 0)) return 0; return clamp(cur / tgt, 0, 1); }
@@ -2861,6 +2993,10 @@ loadGroupFilter();
 loadCustomDrivers();
 applyCustomDrivers();
 render();
+loadOnboardingSeen();
+onboardingActive = !onboardingSeen;
+onboardingSlide = 0;
+renderOnboarding();
 
 // Register the service worker with a relative path (works under /<repo>/).
 if("serviceWorker" in navigator){
