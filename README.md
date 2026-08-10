@@ -155,14 +155,19 @@ Johnny Herbert (the 23rd Legendary) and the 16 Paddock Picks / Paddock Picks:
 Turbo cards — bringing the app to **105 drivers**. The sheet has not been
 updated for them, so their data is deliberately partial rather than guessed:
 
-- The 16 **Special** cards carry only their *Stats at Max Level*, which is all
-  the game shows for them. `CAP.Special` is **1** so that single stat line is
-  what the app displays; there is no invented level curve beneath it, and no
-  coin costs or Asset Trade rate are claimed.
-- **Herbert** carries level 1 only. Levels 2–7 are left as gaps and render as
-  "no data" rather than being interpolated. Card costs to max are still exact
-  (they come from `COST`, which is shared across all Legendaries); coin costs
-  are per-driver in the sheet and so are left blank for him.
+- The 16 **Special** cards carry **level 1 only** — that is what a locked card's
+  compare view shows. (The *Stats at Max Level* chip on those cards is an
+  un-pressed toggle, not a description of the numbers below it; this was
+  verified against Senna, whose locked card resolves to exactly his level-1 row
+  in the sheet.) No level curve above 1, no coin costs, and no Asset Trade rate
+  are claimed for them. `CAP.Special` is **7 provisionally**, mirroring
+  Legendary — no Paddock Picks card's real cap has been observed yet, so
+  cards-to-max for those 16 rests on that assumption.
+- **Herbert** carries a full level 1–7 curve. His level-1 line is a permutation
+  of the Fisichella / G.Villeneuve / McLaren cohort's, and that cohort shares one
+  stat/cost curve, so his remaining levels are cloned from it — the same
+  cohort rule the app already applies to user-added drivers. Coin costs come
+  from the cohort too and were confirmed against the in-game upgrade price.
 
 Cards still at **level 0** (not yet unlocked) show a "unlock to see stats"
 hint — that's expected; the numbers appear as soon as the card reaches level 1.
@@ -176,7 +181,7 @@ hint — that's expected; the numbers appear as soon as the card reaches level 1
 // cards needed to reach the NEXT level, keyed by current level
 const COST = {1:4,2:10,3:20,4:50,5:100,6:200,7:400,8:1000,9:2000,10:4000,11:8000};
 // max level per rarity (from the workbook stat sheets)
-const CAP  = {Common:11, Rare:9, Epic:8, Legendary:7, Special:1};
+const CAP  = {Common:11, Rare:9, Epic:8, Legendary:7, Special:7};
 // per-card "boosted" slot scales stats by +10%
 const BOOST_PCT = 0.10;
 ```
@@ -233,13 +238,14 @@ go offline and it keeps working.
   **Legendary drivers carry Series 0** in the sheet (they unlock from sources
   other than Series progression), so they show **no Series badge**.
 - **Some cards state a GP Event tier instead of a Series.** Every Paddock Picks
-  card prints an *Event availability: <tier> or higher* line on its card, and so
-  does Herbert — the first Legendary observed carrying a per-driver tier rather
-  than the app's blanket "Legendary drivers allowed" toggle. Where a card
-  declares one it is authoritative for GP Event eligibility; every other card
-  keeps the old Series/Legendary behaviour. **The remaining 22 Legendaries have
-  not been checked against their in-game cards yet**, so they still follow the
-  toggle.
+  card prints an *Event availability: <tier> or higher* line, and so do the
+  Legendaries — and they do **not** agree with each other: Herbert and
+  Fisichella read *Junior or higher*, while Senna reads *Champion*. That means
+  the app's blanket "Legendary drivers allowed" toggle is wrong for Legendaries
+  as a group. Where a card declares a tier it is authoritative for GP Event
+  eligibility; every other card keeps the old Series/Legendary behaviour.
+  **Only 3 of the 23 Legendaries have been read off their in-game cards so
+  far** — the other 20 still fall through to the toggle.
 - **Boosts: 65 unique named boosts from the workbook, plus 4 added since.** The
   workbook's *Boosts* sheet spans ~214 rows, but that count includes blank
   separator rows and repeated header rows, and each boost is listed several
