@@ -44,6 +44,20 @@ authoritative for its own work.
 
 ## Done
 
+- [x] Fix the Season tab scoring nothing a real collection had done. The four
+      asset metrics were hand-typed numbers in `SEASON_KEY`, never once written
+      from the collection in `f1sheet.v1` — so a fully played account sat at
+      0 / 0% forever and the four zeros held Base Asset Progress under 60% no
+      matter what. Their stored targets were stale too, from the v1.0 workbook:
+      Drivers 66 of an actual 105, Parts **53 of only 46**, a bar that could
+      never reach 100%. All four are now counted live by `collectionCounts()`
+      (cards at level 1+, and level-ups banked out of the rarity caps), so they
+      track the collection and take in custom cards on their own; the rows are
+      read-only and the four stored keys are gone from `SEASON_DEFAULT`. Old
+      payloads just carry the dead keys, so no schema bump. Verified end-to-end
+      in a real browser: levelling a driver moves the Season bars and survives a
+      reload. (2026-08-10)
+
 - [x] Add the Paddock Picks and Paddock Picks: Turbo collections (16
       "Special" cards) and Johnny Herbert as the 23rd Legendary; introduce
       per-card GP Event availability badges — PR #23 (2026-08-10)
