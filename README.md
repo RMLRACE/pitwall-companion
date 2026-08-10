@@ -19,11 +19,15 @@ living tracker you can update on the go.
 
 - Five tabs: **Drivers**, **Parts** (components), **Tools**, **Season**, and
   **Rewards**.
-- **Drivers** tab grouped by rarity (Common, Rare, Epic, Legendary) and a
+- **Drivers** tab grouped into six collections — Common, Rare, Epic,
+  Legendary, **Paddock Picks** and **Paddock Picks: Turbo** — and a
   **Parts** tab grouped by category (Front Wing, Brakes, Suspension, Rear
-  Wing, Gearbox, Engine, Battery).
-- Each card shows a **rarity badge**, a **Series badge** (e.g. *S3* — the
-  Series that first unlocks the card), a **Level** with −/+ steppers, an
+  Wing, Gearbox, Engine, Battery). The two Paddock Picks collections are
+  separate in-game (8 cards each) and share one rarity, **Special**.
+- Each card shows a **rarity badge**, then either a **Series badge** (e.g. *S3*
+  — the Series that first unlocks the card) or, for cards that state their own
+  GP Event floor instead, an **availability badge** (e.g. *Contender+*), a
+  **Level** with −/+ steppers, an
   **editable card count**, and a **progress bar toward the next level** (or
   **★ MAX** when the card is at its rarity cap). The bar label shows the
   **coin cost** to the next level alongside the card cost.
@@ -140,11 +144,25 @@ scoring. Type in the search box to filter tables and rows.
 
 Per-level **stats**, **Total / Team Score**, **coin/card upgrade costs** and the
 **unlock Series** are baked into the app from the *F1 Clash 2026 Resource Sheet
-v1.1* (`DriverStats` and `ComponentStats` sheets). This covers **all 88 driver
+v1.1* (`DriverStats` and `ComponentStats` sheets). This covers **88 driver
 cards** (Common, Rare, Epic and Legendary) and **all 46 components** across the
 seven categories — every card the source sheet publishes. (An earlier build only
 carried 13 drivers and 11 components; the full per-level dataset is embedded as
 of this release.)
+
+**17 further driver cards come from in-game screenshots, not the sheet** —
+Johnny Herbert (the 23rd Legendary) and the 16 Paddock Picks / Paddock Picks:
+Turbo cards — bringing the app to **105 drivers**. The sheet has not been
+updated for them, so their data is deliberately partial rather than guessed:
+
+- The 16 **Special** cards carry only their *Stats at Max Level*, which is all
+  the game shows for them. `CAP.Special` is **1** so that single stat line is
+  what the app displays; there is no invented level curve beneath it, and no
+  coin costs or Asset Trade rate are claimed.
+- **Herbert** carries level 1 only. Levels 2–7 are left as gaps and render as
+  "no data" rather than being interpolated. Card costs to max are still exact
+  (they come from `COST`, which is shared across all Legendaries); coin costs
+  are per-driver in the sheet and so are left blank for him.
 
 Cards still at **level 0** (not yet unlocked) show a "unlock to see stats"
 hint — that's expected; the numbers appear as soon as the card reaches level 1.
@@ -158,7 +176,7 @@ hint — that's expected; the numbers appear as soon as the card reaches level 1
 // cards needed to reach the NEXT level, keyed by current level
 const COST = {1:4,2:10,3:20,4:50,5:100,6:200,7:400,8:1000,9:2000,10:4000,11:8000};
 // max level per rarity (from the workbook stat sheets)
-const CAP  = {Common:11, Rare:9, Epic:8, Legendary:7};
+const CAP  = {Common:11, Rare:9, Epic:8, Legendary:7, Special:1};
 // per-card "boosted" slot scales stats by +10%
 const BOOST_PCT = 0.10;
 ```
@@ -211,9 +229,17 @@ go offline and it keeps working.
 - **Per-Series unlocks are now included.** The v1.1 workbook carries a *Series*
   column on each card's stat rows (DriverStats col L, ComponentStats col O),
   read from each card's level-1 row. That drives the **Series badge**, the
-  **Series filter/sort**, and the **Series Unlocks** reference table. The **22
-  Legendary drivers carry Series 0** in the sheet (they unlock from sources
+  **Series filter/sort**, and the **Series Unlocks** reference table. The
+  **Legendary drivers carry Series 0** in the sheet (they unlock from sources
   other than Series progression), so they show **no Series badge**.
+- **Some cards state a GP Event tier instead of a Series.** Every Paddock Picks
+  card prints an *Event availability: <tier> or higher* line on its card, and so
+  does Herbert — the first Legendary observed carrying a per-driver tier rather
+  than the app's blanket "Legendary drivers allowed" toggle. Where a card
+  declares one it is authoritative for GP Event eligibility; every other card
+  keeps the old Series/Legendary behaviour. **The remaining 22 Legendaries have
+  not been checked against their in-game cards yet**, so they still follow the
+  toggle.
 - **Boosts: 65 unique named boosts from the workbook, plus 4 added since.** The
   workbook's *Boosts* sheet spans ~214 rows, but that count includes blank
   separator rows and repeated header rows, and each boost is listed several
