@@ -22,15 +22,25 @@ authoritative for its own work.
       and no Asset Trade rate (`TRADE.Special` is 0). Needs an owned,
       upgraded Special card to extend. (raised 2026-08-10)
 
+- [ ] **Let a new user bring in their own workbook data.** Import today accepts
+      only the app's own backup JSON — an `.xlsx`, a CSV, or workbook-shaped
+      JSON is rejected — so a new user's only route is typing 151 cards in by
+      hand. Two candidate routes, to be explored in a later session: a CSV
+      upload with a column-mapping + name-matching step (the workbook uses full
+      names, the app uses surnames with `G.Villeneuve`-style disambiguation), or
+      a one-off converter script in this repo that emits backup JSON the
+      existing Import already accepts. The converter is the smaller change and
+      adds no new failure modes to the app. (raised 2026-08-10)
+
 - [ ] **Watch the schema 1 → 2 migration on a real install.** Zeroing the
       seed made every pre-existing install depend on `migrateLegacySeed()`
       writing `LEGACY_SEED` back as real overrides on first load. It is
       verified card-by-card across all 151 in a harness — including an
       explicitly-zeroed card, a re-load no-op, a fresh install and an
-      unknown future schema — but has not yet run against real
-      `localStorage` on a device that holds a real collection. First load
-      after the v19 service-worker update is the moment to check.
-      (raised 2026-08-10)
+      unknown future schema, and end-to-end through the real Import handler —
+      but has not yet run against real `localStorage` on a device that holds a
+      real collection. The first load after v19 (or whichever build the device
+      picks up first) is the moment to check. (raised 2026-08-10)
 
 ## Done
 
@@ -46,6 +56,13 @@ authoritative for its own work.
 - [x] Start new installs at level 0 across all 151 cards and reset the
       Season dashboard to a beginner state, with a schema 1 → 2 migration
       so existing installs keep everything they had — PR #24 (2026-08-10)
+- [x] Fix Import bypassing the schema 1 → 2 migration. `load()` migrated old
+      payloads but the Import handler did not, so restoring a backup exported
+      before the level-0 change silently reset 73 of 74 cards — every one the
+      user had not explicitly edited. Import now takes the same path as
+      `load()`, and only a genuinely unrecognised schema prompts. Covered by an
+      end-to-end test driving the real file input, verified to fail against the
+      pre-fix code — PR #26 (2026-08-10)
 - [x] Read GP Event availability off the in-game cards for all 23
       Legendary drivers (4 Junior+ / 5 Challenger+ / 6 Contender+ /
       8 Champion). Tier rises monotonically with level-1 total and no power

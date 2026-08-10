@@ -2981,13 +2981,26 @@ document.getElementById("importFile").addEventListener("change", function(){
       if(!data || typeof data !== "object" || !data.overrides || typeof data.overrides !== "object"){
         throw new Error("bad");
       }
-      if(data.schema !== SCHEMA){
-        if(!confirm(`Backup schema (${data.schema}) differs from this app (${SCHEMA}). Import anyway?`)) return;
+      // Imports go through the same schema handling as load(). A schema-1 backup's
+      // entries are diffs against the OLD non-zero seed, so installing them as-is would
+      // zero every card the user never explicitly edited — the same trap load() guards
+      // against, and the reason this isn't just `overrides = data.overrides`.
+      let next, note = "";
+      if(data.schema === SCHEMA){
+        next = data.overrides;
+      }else if(data.schema === 1){
+        next = migrateLegacySeed(data.overrides);
+        note = " — upgraded from an older backup";
+      }else{
+        if(!confirm(`This backup was written by an unrecognised version of the app `
+          + `(schema ${data.schema}; this app uses ${SCHEMA}). Levels and card counts `
+          + `may not come through correctly. Import anyway?`)) return;
+        next = data.overrides;
       }
-      overrides = data.overrides;
+      overrides = next;
       save();
       render();
-      toast("Backup imported");
+      toast("Backup imported" + note);
     }catch(e){
       toast("Import failed — invalid file");
     }
