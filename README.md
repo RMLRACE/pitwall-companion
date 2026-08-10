@@ -256,8 +256,12 @@ go offline and it keeps working.
   the app's blanket "Legendary drivers allowed" toggle is wrong for Legendaries
   as a group. Where a card declares a tier it is authoritative for GP Event
   eligibility; every other card keeps the old Series/Legendary behaviour.
-  **Only 3 of the 23 Legendaries have been read off their in-game cards so
-  far** — the other 20 still fall through to the toggle.
+  **19 of the 23 Legendaries** have now been read off their cards: Junior+ for
+  the 110-total cohort, Challenger+ at 200, Contender+ at 265–290, and Champion
+  from 335 up. Tier tracks level-1 power monotonically, and no power cohort
+  spans two tiers. **Coulthard, Massa, Rindt and Webber are still unread** and
+  fall through to the toggle; all four sit in the 200 cohort alongside Berger,
+  so Challenger+ is the likely answer, but it has not been observed.
 - **Boosts: 65 unique named boosts from the workbook, plus 4 added since.** The
   workbook's *Boosts* sheet spans ~214 rows, but that count includes blank
   separator rows and repeated header rows, and each boost is listed several
