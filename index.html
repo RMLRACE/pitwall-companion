@@ -257,11 +257,16 @@
   .panel{
     background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:12px;
   }
+  /* Flex + margin-left:auto for the hint, not float:right — same pattern as
+     .lo-card h3 and .coll-summary below. A floated hint that wraps to a second line
+     overhangs the panel body, and any body row that is its own BFC (.metric is
+     display:flex) shrinks away from it, rendering that one row at half width. */
   .panel > h3{
     margin:0 0 10px; font-size:12px; text-transform:uppercase; letter-spacing:.08em;
     color:var(--muted); font-weight:800;
+    display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;
   }
-  .panel > h3 .hint{float:right; text-transform:none; letter-spacing:0; font-weight:600; color:var(--muted)}
+  .panel > h3 .hint{margin-left:auto; text-transform:none; letter-spacing:0; font-weight:600; color:var(--muted)}
 
   /* Get the App panel */
   .qr-wrap{display:flex; justify-content:center; padding:6px 0 2px}
@@ -306,6 +311,10 @@
   .metric .minputs input:focus, .metric .minputs select:focus, .cd-date input:focus{
     outline:2px solid var(--accent); outline-offset:1px}
   .metric .msep{color:var(--muted); font-size:12px}
+  /* Derived (read-only) count pair — sized to sit level with the editable controls. */
+  .metric .mcount{display:flex; align-items:center; gap:6px; min-height:38px; font-size:14px}
+  .metric .mcount b{font-weight:800; font-variant-numeric:tabular-nums}
+  .metric .mcount .mtgt{color:var(--muted); font-weight:700}
 
   /* CC score summary */
   .cc-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px}
@@ -662,12 +671,9 @@ function lookup(pairs, key){
 const SEASON_DEFAULT = {
   seasonStart: "2026-04-20",
   seasonEnd:   "2027-04-19",
-  // editable counts: [current, target]. Current values start at 0 for a new install;
-  // the targets are collection sizes, not progress, so they stay.
-  drivers:    [0, 66],
-  driverUpg:  [0, 616],
-  parts:      [0, 53],
-  partUpg:    [0, 442],
+  // No drivers/driverUpg/parts/partUpg here: those four are counted from the collection
+  // by collectionCounts(), never stored. An older payload may still carry the keys —
+  // they're simply ignored, so this needs no schema bump.
   // milestone metrics — lowest rung of each scale in REWARDS
   weekly:     "Rookie",
   gpTotal:    0,
@@ -1282,13 +1288,37 @@ document.getElementById("onboarding").addEventListener("click", (e) => {
 /* ---------- Season computation (mirrors the workbook's CC scoring) ---------- */
 function ratio(cur, tgt){ if(!(tgt > 0)) return 0; return clamp(cur / tgt, 0, 1); }
 
+/* The four asset metrics are DERIVED from the collection on the Drivers/Parts tabs.
+   They used to be eight hand-typed numbers stored in SEASON_KEY, which broke the
+   dashboard two ways at once: a real collection sat at 0 / 0% forever unless you
+   retyped all of it here, and the stored targets (66/616/53/442) came from the v1.0
+   workbook and no longer matched the card set — Parts targeted 53 of only 46 parts,
+   so that bar could never reach 100%. Counting the collection keeps both halves
+   right on their own, including for custom cards the user adds later.
+   `owned` = cards at level >= 1; `levels` = level-ups banked, out of the rarity caps. */
+function collectionCounts(tabName){
+  let owned = 0, cards = 0, levels = 0, levelCap = 0;
+  for(const g of groupsFor(tabName)){
+    for(const seed of seedList(tabName, g)){
+      const c = effective(tabName, g, seed);
+      cards++;
+      levelCap += c.cap;
+      levels += c.level;
+      if(c.level >= 1) owned++;
+    }
+  }
+  return { owned, cards, levels, levelCap };
+}
+
 // The 10 base metrics, each with a live 0..1 weight, in workbook order.
 function baseMetrics(){
+  const d = collectionCounts("drivers");
+  const p = collectionCounts("components");
   return [
-    {key:"drivers",   name:"Drivers",         kind:"count", cur:season.drivers[0],   tgt:season.drivers[1]},
-    {key:"driverUpg", name:"Driver Upgrades", kind:"count", cur:season.driverUpg[0], tgt:season.driverUpg[1]},
-    {key:"parts",     name:"Parts",           kind:"count", cur:season.parts[0],     tgt:season.parts[1]},
-    {key:"partUpg",   name:"Part Upgrades",   kind:"count", cur:season.partUpg[0],   tgt:season.partUpg[1]},
+    {key:"drivers",   name:"Drivers",         kind:"count", cur:d.owned,  tgt:d.cards},
+    {key:"driverUpg", name:"Driver Upgrades", kind:"count", cur:d.levels, tgt:d.levelCap},
+    {key:"parts",     name:"Parts",           kind:"count", cur:p.owned,  tgt:p.cards},
+    {key:"partUpg",   name:"Part Upgrades",   kind:"count", cur:p.levels, tgt:p.levelCap},
     {key:"weekly",    name:"Weekly League",   kind:"pick",  opts:REWARDS.league.map(r=>r[0]),
       val:season.weekly, p:lookup(REWARDS.league, season.weekly) ?? 0},
     {key:"gpTotal",   name:"GP Medals Total", kind:"num",   val:season.gpTotal,
@@ -1845,11 +1875,10 @@ function metricRowHTML(m){
   const p = Math.round(metricPct(m) * 100);
   let inputs;
   if(m.kind === "count"){
-    inputs = `<input type="number" inputmode="numeric" min="0" step="1" value="${m.cur}"
-        data-skey="${m.key}" data-part="0" aria-label="${esc(m.name)} current">
-      <span class="msep">/</span>
-      <input type="number" inputmode="numeric" min="0" step="1" value="${m.tgt}"
-        data-skey="${m.key}" data-part="1" aria-label="${esc(m.name)} target">`;
+    // Read-only: counted from your collection, not typed here. See collectionCounts().
+    inputs = `<span class="mcount" role="img"
+        aria-label="${esc(m.name)}: ${fmt(m.cur)} of ${fmt(m.tgt)}"
+      ><b class="mcur">${fmt(m.cur)}</b><span class="msep">/</span><b class="mtgt">${fmt(m.tgt)}</b></span>`;
   }else if(m.kind === "pick"){
     const opts = m.opts.map(o =>
       `<option value="${esc(o)}"${String(o)===String(m.val)?" selected":""}>${esc(o)}</option>`).join("");
@@ -1892,7 +1921,7 @@ function renderSeason(){
   </div>`;
 
   const progress = `<div class="panel">
-    <h3>Collection &amp; Race Progress <span class="hint">tap values to edit</span></h3>
+    <h3>Collection &amp; Race Progress <span class="hint">race rows: tap to edit</span></h3>
     ${ms.map(metricRowHTML).join("")}
   </div>`;
 
@@ -1919,9 +1948,12 @@ function renderSeason(){
   </div>`;
 
   const help = `<div class="rt-note">
-    Seeded from your v1.0 workbook snapshot. Counts use current ÷ target; the milestone
-    metrics (league, medals, series, races) use the workbook's step scoring, so CC Rank,
-    CC Points and Total CC recompute exactly as the sheet does. All values stay on this device.
+    The first four rows are counted live from your Drivers and Parts tabs — cards at
+    level 1+ out of every card in the game, and level-ups banked out of every level-up
+    available — so they follow your collection with nothing to type here. The milestone
+    metrics (league, medals, series, races) are yours to set and use the workbook's step
+    scoring, so CC Rank, CC Points and Total CC recompute exactly as the sheet does.
+    All values stay on this device.
   </div>`;
 
   app.innerHTML = `<div class="season">${countdown}${progress}${ccCard}${help}${shareHTML()}</div>`;
@@ -1957,6 +1989,10 @@ function refreshSeason(){
     const p = Math.round(metricPct(m) * 100);
     const bar = row.querySelector(".bar > i"); if(bar) bar.style.width = p + "%";
     const pct = row.querySelector(".mpct"); if(pct) pct.textContent = p + "%";
+    if(m.kind === "count"){    // derived — the numbers themselves can move too
+      const cur = row.querySelector(".mcur"); if(cur) cur.textContent = fmt(m.cur);
+      const tgt = row.querySelector(".mtgt"); if(tgt) tgt.textContent = fmt(m.tgt);
+    }
   });
   const pot = ccScore(true);
   const setW = (id, w) => { const el = document.getElementById(id); if(el) el.style.width = w; };
@@ -2850,11 +2886,7 @@ app.addEventListener("change", (e) => {
 function applySeasonField(el){
   const key = el.dataset.skey;
   if(!key) return;
-  if(key === "drivers" || key === "driverUpg" || key === "parts" || key === "partUpg"){
-    const arr = season[key].slice();
-    arr[+el.dataset.part] = Math.max(0, Math.floor(+el.value || 0));
-    season[key] = arr;
-  }else if(key === "gpTotal"){
+  if(key === "gpTotal"){
     season[key] = Math.max(0, Math.floor(+el.value || 0));
   }else if(key === "series" || key === "racesDone" || key === "racesWon"){
     season[key] = Number(el.value);

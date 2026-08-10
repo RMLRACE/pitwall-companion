@@ -105,21 +105,27 @@ from the workbook's **CC Tracker**:
 - **Season countdown** — a *days-left* counter plus editable **Season start**
   and **Season end** dates and a *season elapsed* bar (today is read live from
   the device clock).
-- **Collection & race progress** — editable **current ÷ target** counts for
-  Drivers, Driver Upgrades, Parts and Part Upgrades, plus milestone pickers for
+- **Collection & race progress** — **current ÷ target** counts for Drivers,
+  Driver Upgrades, Parts and Part Upgrades, counted straight off your Drivers
+  and Parts tabs and so read-only here: cards at level 1+ out of every card in
+  the game, and level-ups banked out of every level-up available. Custom cards
+  you add are included automatically. Below them are milestone pickers for
   Weekly League, GP Medals (total & best), Highest Series, Races Done and Races
-  Won. Each row shows a progress bar and a live percentage.
+  Won, which are yours to set. Each row shows a progress bar and a live
+  percentage.
 - **CC Score** — **Base Asset Progress**, **CC Rank** (/20), **CC Points**
   (/500) and **Total CC** (/650), all **recomputed live** exactly as the
   workbook does (average of the ten base metrics → rank → points → plus the
   coin-bank contribution). Editing any input updates the score instantly.
 - **Now vs potential** — each CC figure also shows a **▲ potential** value
   underneath: what your score becomes if every count metric reaches its target
-  (the workbook's *Potential Completion* projection). Editing a target updates
-  the potential live.
+  (the workbook's *Potential Completion* projection) — i.e. a fully maxed
+  collection on top of the milestones you have selected.
 
-Season inputs are saved separately in `localStorage` under **`f1sheet.season.v1`**
-(schema-guarded). Nothing leaves the device.
+The milestone inputs are saved separately in `localStorage` under
+**`f1sheet.season.v1`** (schema-guarded). The four collection counts are stored
+nowhere — they are derived from your collection every time the tab renders, so
+they cannot drift out of step with it. Nothing leaves the device.
 
 ### Rewards tab (reference tables)
 
@@ -220,7 +226,11 @@ go offline and it keeps working.
   seed values back as real overrides (`LEGACY_SEED` / `migrateLegacySeed`), so
   upgrading users keep exactly what the app was already showing them. An
   explicit schema-1 override always wins, including one that set a card to 0.
-- Season-dashboard values live under a separate key **`f1sheet.season.v1`**.
+- Season-dashboard values live under a separate key **`f1sheet.season.v1`** —
+  the milestone metrics and the season dates only. The four collection counts
+  are *not* stored: they are counted from the collection above on every render.
+  (They used to be stored, and stored numbers that nothing updated is exactly
+  why the dashboard read 0% for collections that were well underway.)
 - Per-card **Boosted +10%** toggles live under **`f1sheet.boosted.v1`**.
 - Loadouts preferences (mode, selected attributes, last-viewed track) live
   under **`f1sheet.loadoutAttrs.v1`**.
