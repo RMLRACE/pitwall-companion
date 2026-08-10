@@ -98,7 +98,9 @@ you add) are stored, since there's no other source for that data.
 
 ### Season tab (progress dashboard)
 
-A live snapshot of your season, seeded from the workbook's **CC Tracker**:
+A live snapshot of your season. A new install starts at a beginner state
+(Rookie, Series 1, zero races and counts); the milestone scales themselves come
+from the workbook's **CC Tracker**:
 
 - **Season countdown** — a *days-left* counter plus editable **Season start**
   and **Season end** dates and a *season elapsed* bar (today is read live from
@@ -117,7 +119,7 @@ A live snapshot of your season, seeded from the workbook's **CC Tracker**:
   the potential live.
 
 Season inputs are saved separately in `localStorage` under **`f1sheet.season.v1`**
-(schema-guarded, seeded from the v1.0 snapshot). Nothing leaves the device.
+(schema-guarded). Nothing leaves the device.
 
 ### Rewards tab (reference tables)
 
@@ -208,6 +210,16 @@ go offline and it keeps working.
 - Card levels/counts live in `localStorage` under the key **`f1sheet.v1`**.
 - Only values you **change** are stored (as *overrides* keyed by card id), so
   future seed-data updates still flow through to cards you haven't touched.
+- **A fresh install starts every card at level 0 with 0 cards** — the app ships
+  the card *catalogue*, not anyone's collection. Up to v16 the seed carried the
+  author's own progress, which meant a new download opened onto someone else's
+  levels.
+- Because overrides are diffs, zeroing that seed would have silently reset any
+  card a existing user had left at its seeded value. `SCHEMA` is therefore now
+  **2**: a stored schema-1 payload is migrated on first load, writing the old
+  seed values back as real overrides (`LEGACY_SEED` / `migrateLegacySeed`), so
+  upgrading users keep exactly what the app was already showing them. An
+  explicit schema-1 override always wins, including one that set a card to 0.
 - Season-dashboard values live under a separate key **`f1sheet.season.v1`**.
 - Per-card **Boosted +10%** toggles live under **`f1sheet.boosted.v1`**.
 - Loadouts preferences (mode, selected attributes, last-viewed track) live
@@ -320,7 +332,7 @@ one, so users get the updated files instead of a stale copy.
 
 ## Credits
 
-Collection snapshot seeded from the community **F1 Clash 2026 Resource Sheet
+Card catalogue drawn from the community **F1 Clash 2026 Resource Sheet
 v1.0**; per-level stats, costs, Series, boosts and reference tables from the
 author's updated **v1.1** template — both by **TR The Flash**. Track Stats
 data and the 4 most recently added Boosts are transcribed directly from

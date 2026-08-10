@@ -556,7 +556,9 @@ const CAP  = {Common:11, Rare:9, Epic:8, Legendary:7, Special:7};
 const TRADE = {Common:1000, Rare:100, Epic:10, Legendary:3, Special:0};
 
 const STORAGE_KEY = "f1sheet.v1";
-const SCHEMA = 1;
+// 2: the seed dropped to all-zero (see LEGACY_SEED). A stored schema-1 payload is
+// migrated on load rather than discarded — its diffs were against the old seed.
+const SCHEMA = 2;
 
 // Season dashboard has its own namespaced, schema-guarded key.
 const SEASON_KEY = "f1sheet.season.v1";
@@ -595,6 +597,17 @@ const CUSTOM_DRIVERS_SCHEMA = 1;
 // namespaced, schema-guarded key, same convention as the others above.
 const ONBOARDING_KEY = "f1sheet.onboarding.v1";
 const ONBOARDING_SCHEMA = 1;
+
+/* ---------- Legacy seed (schema 1 -> 2 migration) ----------
+   Until v16 the seed shipped one particular collection's progress, and localStorage
+   only ever stored DIFFS from it — setOverride() deletes an override the moment a
+   value returns to its seeded number. Zeroing the seed would therefore have silently
+   reset every card an existing user had left at its seeded level. These are the
+   levels/amounts the seed used to carry; migrateLegacySeed() writes them back as real
+   overrides the first time a schema-1 payload is loaded, so upgrading users keep
+   exactly what the app was already showing them. New installs have no payload to
+   migrate and start at zero. Do not edit — this is a frozen historical record. */
+const LEGACY_SEED = {"d:Common:Lindblad":[7,2397],"d:Common:Colapinto":[7,2612],"d:Common:Bottas":[7,3131],"d:Common:Bortoleto":[8,1866],"d:Common:Gasly":[6,2647],"d:Common:Stroll":[6,3753],"d:Common:Ocon":[6,2952],"d:Common:Lawson":[7,1938],"d:Common:Bearman":[8,1326],"d:Common:Hadjar":[9,1104],"d:Common:Hulkenberg":[6,3067],"d:Common:Alonso":[5,2055],"d:Common:Sainz":[5,3208],"d:Common:Albon":[5,2631],"d:Common:Antonelli":[5,2912],"d:Common:Perez":[5,2890],"d:Common:Hamilton":[4,2544],"d:Common:Leclerc":[4,2604],"d:Common:Russell":[4,2230],"d:Common:Piastri":[3,2143],"d:Common:Verstappen":[4,2262],"d:Common:Norris":[3,1943],"d:Rare:Bortoleto":[9,0],"d:Rare:Bottas":[9,0],"d:Rare:Colapinto":[6,1352],"d:Rare:Lindblad":[2,908],"d:Rare:Gasly":[2,900],"d:Rare:Stroll":[2,1061],"d:Rare:Ocon":[1,421],"d:Rare:Lawson":[1,321],"d:Rare:Bearman":[6,283],"d:Rare:Hadjar":[1,520],"d:Rare:Hulkenberg":[1,342],"d:Rare:Albon":[1,29],"d:Epic:Gasly":[6,148],"d:Epic:Lindblad":[7,96],"d:Epic:Bottas":[6,183],"d:Epic:Colapinto":[6,49],"d:Legendary:Fisichella":[2,43],"d:Legendary:McLaren":[3,100],"d:Legendary:G.Villeneuve":[1,29],"d:Legendary:Webber":[2,0],"d:Legendary:Massa":[2,3],"d:Legendary:Rindt":[1,10],"d:Legendary:Herbert":[1,3],"c:Front Wing:Wind Guard":[9,1049],"c:Front Wing:Zephyr":[9,836],"c:Front Wing:Laminar":[9,1181],"c:Front Wing:Scythe":[8,2010],"c:Front Wing:Flashpoint":[6,29],"c:Brakes:Anchor":[9,537],"c:Brakes:Flow 2K":[9,805],"c:Brakes:Aegis":[6,2602],"c:Brakes:Scramble":[8,350],"c:Suspension:Shockwave":[9,1221],"c:Suspension:Jumpstart":[9,948],"c:Suspension:Stability Unit":[9,845],"c:Suspension:Equilibrium":[8,815],"c:Suspension:Curver 3.0":[5,8],"c:Rear Wing:Wobble":[9,502],"c:Rear Wing:Tailwind":[9,1222],"c:Rear Wing:Air Channel":[9,2577],"c:Rear Wing:Vibe Lift":[8,1830],"c:Rear Wing:Impact":[7,8],"c:Gearbox:Cadence":[9,741],"c:Gearbox:Flow Logic":[9,1135],"c:Gearbox:Stratos":[7,24],"c:Gearbox:Shift X":[8,190],"c:Engine:Tempest":[7,35],"c:Engine:Bedrock":[9,1358],"c:Engine:Velocity":[8,1670],"c:Engine:Axis 3000":[8,153],"c:Battery:Charge Core":[6,188],"c:Battery:Power Grid":[6,1088]};
 
 /* ---------- Reward & payout reference tables (from workbook "CCData",
    identical in v1.0 and v1.1) ---------- */
@@ -648,19 +661,20 @@ function lookup(pairs, key){
 const SEASON_DEFAULT = {
   seasonStart: "2026-04-20",
   seasonEnd:   "2027-04-19",
-  // editable counts: [current, target]
-  drivers:    [38, 66],
-  driverUpg:  [185, 616],
-  parts:      [36, 53],
-  partUpg:    [211, 442],
-  // milestone metrics
-  weekly:     "Legend",
-  gpTotal:    2,
-  gpBest:     "Junior 2nd",
-  series:     6,
-  racesDone:  500,
-  racesWon:   400,
-  coins:      "100K"
+  // editable counts: [current, target]. Current values start at 0 for a new install;
+  // the targets are collection sizes, not progress, so they stay.
+  drivers:    [0, 66],
+  driverUpg:  [0, 616],
+  parts:      [0, 53],
+  partUpg:    [0, 442],
+  // milestone metrics — lowest rung of each scale in REWARDS
+  weekly:     "Rookie",
+  gpTotal:    0,
+  gpBest:     "None",
+  series:     1,
+  racesDone:  0,
+  racesWon:   0,
+  coins:      "0K"
 };
 
 // Collection sections on the Drivers tab. For the four original tiers the section name
@@ -677,44 +691,44 @@ const COMPONENT_GROUPS = ["Front Wing","Brakes","Suspension","Rear Wing","Gearbo
 const DEFAULT = {
   "drivers": {
     "Common": [
-      {"name":"Lindblad","rarity":"Common","level":7,"amount":2397},
-      {"name":"Colapinto","rarity":"Common","level":7,"amount":2612},
-      {"name":"Bottas","rarity":"Common","level":7,"amount":3131},
-      {"name":"Bortoleto","rarity":"Common","level":8,"amount":1866},
-      {"name":"Gasly","rarity":"Common","level":6,"amount":2647},
-      {"name":"Stroll","rarity":"Common","level":6,"amount":3753},
-      {"name":"Ocon","rarity":"Common","level":6,"amount":2952},
-      {"name":"Lawson","rarity":"Common","level":7,"amount":1938},
-      {"name":"Bearman","rarity":"Common","level":8,"amount":1326},
-      {"name":"Hadjar","rarity":"Common","level":9,"amount":1104},
-      {"name":"Hulkenberg","rarity":"Common","level":6,"amount":3067},
-      {"name":"Alonso","rarity":"Common","level":5,"amount":2055},
-      {"name":"Sainz","rarity":"Common","level":5,"amount":3208},
-      {"name":"Albon","rarity":"Common","level":5,"amount":2631},
-      {"name":"Antonelli","rarity":"Common","level":5,"amount":2912},
-      {"name":"Perez","rarity":"Common","level":5,"amount":2890},
-      {"name":"Hamilton","rarity":"Common","level":4,"amount":2544},
-      {"name":"Leclerc","rarity":"Common","level":4,"amount":2604},
-      {"name":"Russell","rarity":"Common","level":4,"amount":2230},
-      {"name":"Piastri","rarity":"Common","level":3,"amount":2143},
-      {"name":"Verstappen","rarity":"Common","level":4,"amount":2262},
-      {"name":"Norris","rarity":"Common","level":3,"amount":1943}
+      {"name":"Lindblad","rarity":"Common","level":0,"amount":0},
+      {"name":"Colapinto","rarity":"Common","level":0,"amount":0},
+      {"name":"Bottas","rarity":"Common","level":0,"amount":0},
+      {"name":"Bortoleto","rarity":"Common","level":0,"amount":0},
+      {"name":"Gasly","rarity":"Common","level":0,"amount":0},
+      {"name":"Stroll","rarity":"Common","level":0,"amount":0},
+      {"name":"Ocon","rarity":"Common","level":0,"amount":0},
+      {"name":"Lawson","rarity":"Common","level":0,"amount":0},
+      {"name":"Bearman","rarity":"Common","level":0,"amount":0},
+      {"name":"Hadjar","rarity":"Common","level":0,"amount":0},
+      {"name":"Hulkenberg","rarity":"Common","level":0,"amount":0},
+      {"name":"Alonso","rarity":"Common","level":0,"amount":0},
+      {"name":"Sainz","rarity":"Common","level":0,"amount":0},
+      {"name":"Albon","rarity":"Common","level":0,"amount":0},
+      {"name":"Antonelli","rarity":"Common","level":0,"amount":0},
+      {"name":"Perez","rarity":"Common","level":0,"amount":0},
+      {"name":"Hamilton","rarity":"Common","level":0,"amount":0},
+      {"name":"Leclerc","rarity":"Common","level":0,"amount":0},
+      {"name":"Russell","rarity":"Common","level":0,"amount":0},
+      {"name":"Piastri","rarity":"Common","level":0,"amount":0},
+      {"name":"Verstappen","rarity":"Common","level":0,"amount":0},
+      {"name":"Norris","rarity":"Common","level":0,"amount":0}
     ],
     "Rare": [
-      {"name":"Bortoleto","rarity":"Rare","level":9,"amount":0},
-      {"name":"Bottas","rarity":"Rare","level":9,"amount":0},
-      {"name":"Colapinto","rarity":"Rare","level":6,"amount":1352},
-      {"name":"Lindblad","rarity":"Rare","level":2,"amount":908},
-      {"name":"Gasly","rarity":"Rare","level":2,"amount":900},
-      {"name":"Stroll","rarity":"Rare","level":2,"amount":1061},
-      {"name":"Ocon","rarity":"Rare","level":1,"amount":421},
-      {"name":"Lawson","rarity":"Rare","level":1,"amount":321},
-      {"name":"Bearman","rarity":"Rare","level":6,"amount":283},
-      {"name":"Hadjar","rarity":"Rare","level":1,"amount":520},
-      {"name":"Hulkenberg","rarity":"Rare","level":1,"amount":342},
+      {"name":"Bortoleto","rarity":"Rare","level":0,"amount":0},
+      {"name":"Bottas","rarity":"Rare","level":0,"amount":0},
+      {"name":"Colapinto","rarity":"Rare","level":0,"amount":0},
+      {"name":"Lindblad","rarity":"Rare","level":0,"amount":0},
+      {"name":"Gasly","rarity":"Rare","level":0,"amount":0},
+      {"name":"Stroll","rarity":"Rare","level":0,"amount":0},
+      {"name":"Ocon","rarity":"Rare","level":0,"amount":0},
+      {"name":"Lawson","rarity":"Rare","level":0,"amount":0},
+      {"name":"Bearman","rarity":"Rare","level":0,"amount":0},
+      {"name":"Hadjar","rarity":"Rare","level":0,"amount":0},
+      {"name":"Hulkenberg","rarity":"Rare","level":0,"amount":0},
       {"name":"Alonso","rarity":"Rare","level":0,"amount":0},
       {"name":"Sainz","rarity":"Rare","level":0,"amount":0},
-      {"name":"Albon","rarity":"Rare","level":1,"amount":29},
+      {"name":"Albon","rarity":"Rare","level":0,"amount":0},
       {"name":"Antonelli","rarity":"Rare","level":0,"amount":0},
       {"name":"Perez","rarity":"Rare","level":0,"amount":0},
       {"name":"Hamilton","rarity":"Rare","level":0,"amount":0},
@@ -725,10 +739,10 @@ const DEFAULT = {
       {"name":"Norris","rarity":"Rare","level":0,"amount":0}
     ],
     "Epic": [
-      {"name":"Gasly","rarity":"Epic","level":6,"amount":148},
-      {"name":"Lindblad","rarity":"Epic","level":7,"amount":96},
-      {"name":"Bottas","rarity":"Epic","level":6,"amount":183},
-      {"name":"Colapinto","rarity":"Epic","level":6,"amount":49},
+      {"name":"Gasly","rarity":"Epic","level":0,"amount":0},
+      {"name":"Lindblad","rarity":"Epic","level":0,"amount":0},
+      {"name":"Bottas","rarity":"Epic","level":0,"amount":0},
+      {"name":"Colapinto","rarity":"Epic","level":0,"amount":0},
       {"name":"Lawson","rarity":"Epic","level":0,"amount":0},
       {"name":"Bortoleto","rarity":"Epic","level":0,"amount":0},
       {"name":"Stroll","rarity":"Epic","level":0,"amount":0},
@@ -749,14 +763,14 @@ const DEFAULT = {
       {"name":"Norris","rarity":"Epic","level":0,"amount":0}
     ],
     "Legendary": [
-      {"name":"Fisichella","rarity":"Legendary","level":2,"amount":43},
-      {"name":"McLaren","rarity":"Legendary","level":3,"amount":100},
-      {"name":"G.Villeneuve","rarity":"Legendary","level":1,"amount":29},
-      {"name":"Webber","rarity":"Legendary","level":2,"amount":0},
+      {"name":"Fisichella","rarity":"Legendary","level":0,"amount":0},
+      {"name":"McLaren","rarity":"Legendary","level":0,"amount":0},
+      {"name":"G.Villeneuve","rarity":"Legendary","level":0,"amount":0},
+      {"name":"Webber","rarity":"Legendary","level":0,"amount":0},
       {"name":"Berger","rarity":"Legendary","level":0,"amount":0},
-      {"name":"Massa","rarity":"Legendary","level":2,"amount":3},
+      {"name":"Massa","rarity":"Legendary","level":0,"amount":0},
       {"name":"Coulthard","rarity":"Legendary","level":0,"amount":0},
-      {"name":"Rindt","rarity":"Legendary","level":1,"amount":10},
+      {"name":"Rindt","rarity":"Legendary","level":0,"amount":0},
       {"name":"Hunt","rarity":"Legendary","level":0,"amount":0},
       {"name":"J.Villeneuve","rarity":"Legendary","level":0,"amount":0},
       {"name":"Andretti","rarity":"Legendary","level":0,"amount":0},
@@ -771,7 +785,7 @@ const DEFAULT = {
       {"name":"Prost","rarity":"Legendary","level":0,"amount":0},
       {"name":"Schumacher","rarity":"Legendary","level":0,"amount":0},
       {"name":"Senna","rarity":"Legendary","level":0,"amount":0},
-      {"name":"Herbert","rarity":"Legendary","level":1,"amount":3}
+      {"name":"Herbert","rarity":"Legendary","level":0,"amount":0}
     ],
     "Paddock Picks": [
       {"name":"Piastri","rarity":"Special","level":0,"amount":0},
@@ -796,67 +810,67 @@ const DEFAULT = {
   },
   "components": {
     "Front Wing": [
-      {"name":"Wind Guard","rarity":"Common","level":9,"amount":1049},
-      {"name":"Zephyr","rarity":"Rare","level":9,"amount":836},
-      {"name":"Laminar","rarity":"Common","level":9,"amount":1181},
-      {"name":"Scythe","rarity":"Common","level":8,"amount":2010},
-      {"name":"Flashpoint","rarity":"Epic","level":6,"amount":29},
+      {"name":"Wind Guard","rarity":"Common","level":0,"amount":0},
+      {"name":"Zephyr","rarity":"Rare","level":0,"amount":0},
+      {"name":"Laminar","rarity":"Common","level":0,"amount":0},
+      {"name":"Scythe","rarity":"Common","level":0,"amount":0},
+      {"name":"Flashpoint","rarity":"Epic","level":0,"amount":0},
       {"name":"Leading Edge","rarity":"Rare","level":0,"amount":0},
       {"name":"Loose Fit","rarity":"Epic","level":0,"amount":0}
     ],
     "Brakes": [
-      {"name":"Anchor","rarity":"Common","level":9,"amount":537},
-      {"name":"Flow 2K","rarity":"Common","level":9,"amount":805},
-      {"name":"Aegis","rarity":"Common","level":6,"amount":2602},
-      {"name":"Scramble","rarity":"Rare","level":8,"amount":350},
+      {"name":"Anchor","rarity":"Common","level":0,"amount":0},
+      {"name":"Flow 2K","rarity":"Common","level":0,"amount":0},
+      {"name":"Aegis","rarity":"Common","level":0,"amount":0},
+      {"name":"Scramble","rarity":"Rare","level":0,"amount":0},
       {"name":"Aura Lock","rarity":"Rare","level":0,"amount":0},
       {"name":"Pressure Point","rarity":"Epic","level":0,"amount":0},
       {"name":"Stabilix","rarity":"Epic","level":0,"amount":0}
     ],
     "Suspension": [
-      {"name":"Shockwave","rarity":"Common","level":9,"amount":1221},
-      {"name":"Jumpstart","rarity":"Common","level":9,"amount":948},
-      {"name":"Stability Unit","rarity":"Common","level":9,"amount":845},
-      {"name":"Equilibrium","rarity":"Rare","level":8,"amount":815},
-      {"name":"Curver 3.0","rarity":"Epic","level":5,"amount":8},
+      {"name":"Shockwave","rarity":"Common","level":0,"amount":0},
+      {"name":"Jumpstart","rarity":"Common","level":0,"amount":0},
+      {"name":"Stability Unit","rarity":"Common","level":0,"amount":0},
+      {"name":"Equilibrium","rarity":"Rare","level":0,"amount":0},
+      {"name":"Curver 3.0","rarity":"Epic","level":0,"amount":0},
       {"name":"Motion Link V2","rarity":"Rare","level":0,"amount":0},
       {"name":"Bounce","rarity":"Epic","level":0,"amount":0}
     ],
     "Rear Wing": [
-      {"name":"Wobble","rarity":"Rare","level":9,"amount":502},
-      {"name":"Tailwind","rarity":"Common","level":9,"amount":1222},
-      {"name":"Air Channel","rarity":"Common","level":9,"amount":2577},
-      {"name":"Vibe Lift","rarity":"Common","level":8,"amount":1830},
-      {"name":"Impact","rarity":"Rare","level":7,"amount":8},
+      {"name":"Wobble","rarity":"Rare","level":0,"amount":0},
+      {"name":"Tailwind","rarity":"Common","level":0,"amount":0},
+      {"name":"Air Channel","rarity":"Common","level":0,"amount":0},
+      {"name":"Vibe Lift","rarity":"Common","level":0,"amount":0},
+      {"name":"Impact","rarity":"Rare","level":0,"amount":0},
       {"name":"Downforce","rarity":"Epic","level":0,"amount":0},
       {"name":"Dominus","rarity":"Epic","level":0,"amount":0}
     ],
     "Gearbox": [
-      {"name":"Cadence","rarity":"Common","level":9,"amount":741},
-      {"name":"Flow Logic","rarity":"Common","level":9,"amount":1135},
-      {"name":"Stratos","rarity":"Epic","level":7,"amount":24},
-      {"name":"Shift X","rarity":"Rare","level":8,"amount":190},
+      {"name":"Cadence","rarity":"Common","level":0,"amount":0},
+      {"name":"Flow Logic","rarity":"Common","level":0,"amount":0},
+      {"name":"Stratos","rarity":"Epic","level":0,"amount":0},
+      {"name":"Shift X","rarity":"Rare","level":0,"amount":0},
       {"name":"Lockdown","rarity":"Rare","level":0,"amount":0},
       {"name":"Fracture","rarity":"Rare","level":0,"amount":0},
       {"name":"Powerbox","rarity":"Epic","level":0,"amount":0}
     ],
     "Engine": [
-      {"name":"Tempest","rarity":"Epic","level":7,"amount":35},
-      {"name":"Bedrock","rarity":"Common","level":9,"amount":1358},
-      {"name":"Velocity","rarity":"Common","level":8,"amount":1670},
-      {"name":"Axis 3000","rarity":"Rare","level":8,"amount":153},
+      {"name":"Tempest","rarity":"Epic","level":0,"amount":0},
+      {"name":"Bedrock","rarity":"Common","level":0,"amount":0},
+      {"name":"Velocity","rarity":"Common","level":0,"amount":0},
+      {"name":"Axis 3000","rarity":"Rare","level":0,"amount":0},
       {"name":"DriveOS","rarity":"Rare","level":0,"amount":0},
       {"name":"Hotfix","rarity":"Rare","level":0,"amount":0},
       {"name":"Overdrive","rarity":"Epic","level":0,"amount":0}
     ],
     "Battery": [
-      {"name":"Charge Core","rarity":"Epic","level":6,"amount":188},
-      {"name":"Power Grid","rarity":"Common","level":6,"amount":1088},
+      {"name":"Charge Core","rarity":"Epic","level":0,"amount":0},
+      {"name":"Power Grid","rarity":"Common","level":0,"amount":0},
       {"name":"Energy Reserve","rarity":"Rare","level":0,"amount":0},
       {"name":"Spare Pack","rarity":"Rare","level":0,"amount":0}
     ]
   }
-};
+};;
 
 /* ---------- Reference data (from v1.1 workbook: per-level stats + costs) ----------
    Compact record per card id:
@@ -960,15 +974,37 @@ let driversPick2 = null;          // Tools > Drivers: explicit driver id for com
 let customDrivers = [];           // [{name, rarity, level, amount, vals:[5 stats]}] user-added Drivers,
                                    // alongside the built-in DEFAULT.drivers/REF entries
 
+// Turn a schema-1 payload into a schema-2 one. Schema-1 diffs were taken against the
+// old non-zero seed, so any card the user left alone has NO entry — its value lived in
+// the seed that has since become 0. Materialise those as real overrides so the upgrade
+// is invisible: whatever the app showed before, it shows after. An explicit schema-1
+// override always wins, including one that deliberately set a card back to 0.
+function migrateLegacySeed(stored){
+  const merged = Object.assign({}, LEGACY_SEED_OVERRIDES(), stored || {});
+  return merged;
+}
+function LEGACY_SEED_OVERRIDES(){
+  const out = {};
+  for(const id in LEGACY_SEED){
+    const [level, amount] = LEGACY_SEED[id];
+    out[id] = {level, amount};
+  }
+  return out;
+}
+
 function load(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
-    if(!raw) return;
+    if(!raw) return;                     // new install -> zeroed seed, nothing to migrate
     const data = JSON.parse(raw);
-    // schema guard for safe future migrations
-    if(data && typeof data === "object" && data.schema === SCHEMA && data.overrides){
+    if(!data || typeof data !== "object" || !data.overrides) return;
+    if(data.schema === SCHEMA){
       overrides = data.overrides;
+    }else if(data.schema === 1){
+      overrides = migrateLegacySeed(data.overrides);
+      save();                            // rewrite at schema 2 so this runs exactly once
     }
+    // any other schema -> unknown format, fall back to the seed
   }catch(e){ /* corrupt storage -> fall back to seed */ }
 }
 function save(){
