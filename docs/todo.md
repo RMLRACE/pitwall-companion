@@ -44,6 +44,17 @@ authoritative for its own work.
 
 ## Done
 
+- [x] Fix a stray "Common" Herbert duplicate. Herbert shipped built-in as the
+      23rd Legendary in PR #23, but a `customDrivers` entry added by hand
+      *before* that (via Drivers → Add a new driver, likely defaulted to
+      Common) survived unchanged — the add-driver dedupe only checked the
+      built-in list for the selected group, not every group, so it never
+      caught a name that was built-in under a different rarity. Two fixes:
+      `loadCustomDrivers()` now prunes any custom driver whose name matches
+      a built-in driver in *any* group and persists the cleanup, so every
+      affected install self-heals on next load; and the add-driver dedupe
+      check (`isBuiltInDriverName`) now checks all built-in groups so this
+      can't recur for a future officially-added driver. (2026-08-14)
 - [x] Fix the Season tab scoring nothing a real collection had done. The four
       asset metrics were hand-typed numbers in `SEASON_KEY`, never once written
       from the collection in `f1sheet.v1` — so a fully played account sat at
