@@ -1557,19 +1557,20 @@ const GP_TIER_RANK = {junior:0, challenger:1, contender:2, champion:3};
 /* Some cards state their own floor on the card ("Event availability: Contender or
    higher") instead of inheriting one from their Series. Every Paddock Picks / Paddock
    Picks: Turbo driver does, and so does every one of the 23 Legendaries — and they do
-   not agree with each other (Fisichella "Junior or higher", Senna "Champion"), which is
-   why the blanket "Legendary drivers allowed" toggle below was wrong for them as a
-   group. All 23 now carry `av`, so that toggle currently changes nothing; it is kept as
-   the fallback for any Legendary the game adds before its card has been read (a new one
-   arrives with no `av`, exactly as Herbert did). Where REF.av is set it is
-   authoritative. */
+   not agree with each other (Fisichella "Junior or higher", Senna "Champion"). Where
+   REF.av is set it is authoritative for *which* tier a card needs. The "Legendary
+   drivers allowed" toggle is a separate, higher-priority gate: unchecked, it excludes
+   every Legendary outright regardless of what its own card states, so a user who wants
+   Legendaries out of a loadout entirely doesn't have to know any individual card's `av`.
+   Checked, `av` (or the fallback below for a Legendary added before its card has been
+   read, a new one arriving with no `av`, exactly as Herbert did) still applies on top. */
 function availabilityOf(id){ const r = REF[id]; return r && r.av ? r.av : null; }
 
 function gpEligible(c){
+  if(c.rarity === "Legendary" && !gpLegendary) return false;
   const av = availabilityOf(c.id);
   // "<tier> or higher" -> eligible in that tier and every tier above it.
   if(av) return (GP_TIER_RANK[gpTier] ?? 3) >= (GP_TIER_RANK[av] ?? 0);
-  if(c.rarity === "Legendary") return gpLegendary;
   const cap = GP_TIERS.find(t => t.k === gpTier).cap;
   if(cap === Infinity) return true;
   const sr = seriesOf(c.id);
@@ -2183,7 +2184,7 @@ function gpFilterBarHTML(){
     <div class="lo-attr-bar">${tierBtns}</div>
     <label class="gp-legendary-tog">
       <input type="checkbox" data-gp-legendary ${gpLegendary?'checked':''}>
-      <span>Legendary drivers allowed<small>only affects Legendaries with no tier on their card</small></span>
+      <span>Legendary drivers allowed<small>unchecked hides every Legendary, even ones your GP tier would otherwise allow</small></span>
     </label>
   </details>`;
 }
