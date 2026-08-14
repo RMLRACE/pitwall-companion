@@ -94,3 +94,14 @@ authoritative for its own work.
       cohort spans two tiers; both are asserted. The "Legendary drivers
       allowed" toggle is now inert and kept only as the fallback for a
       Legendary added before its card has been read — PR #24 (2026-08-10)
+- [x] **Reversed the PR #24 "inert toggle" decision above.** Reported as a bug:
+      the GP Event tool showed Webber (Legendary, card states "Challenger or
+      higher") in Best Defending with "Legendary drivers allowed" unchecked and
+      Challenger selected — correct per the old per-card-`av`-is-authoritative
+      logic, but not what a user unchecking the box expects. `gpEligible()` in
+      `index.html` now checks the toggle first for any Legendary and excludes it
+      outright when unchecked, before falling through to its own card's `av`
+      tier when checked — so the checkbox is a master gate again, and a
+      Legendary's own tier only narrows further from there. Checkbox subtext
+      updated to match ("unchecked hides every Legendary, even ones your GP
+      tier would otherwise allow").
