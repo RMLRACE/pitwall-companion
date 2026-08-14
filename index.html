@@ -1163,6 +1163,14 @@ function saveCustomBoosts(){
 function allBoosts(){ return BOOSTS.concat(customBoosts); }
 
 /* ---------- Custom (user-added) Drivers ---------- */
+// True if `name` is now a built-in driver in ANY group. A custom driver added before the
+// app shipped that name as built-in (e.g. Herbert, added by hand pre-release as "Common"
+// then shipped built-in as the 23rd Legendary) becomes a stale duplicate once the built-in
+// entry exists — the wrong-rarity card users see is this leftover, not the real one.
+function isBuiltInDriverName(name){
+  const n = name.toLowerCase();
+  return Object.values(DEFAULT.drivers).some(list => list.some(s => s.name.toLowerCase() === n));
+}
 function loadCustomDrivers(){
   customDrivers = [];
   try{
@@ -1173,6 +1181,9 @@ function loadCustomDrivers(){
       customDrivers = data.drivers;
     }
   }catch(e){ /* corrupt storage -> none custom */ }
+  const before = customDrivers.length;
+  customDrivers = customDrivers.filter(c => !isBuiltInDriverName(c.name));
+  if(customDrivers.length !== before) saveCustomDrivers();  // drop stale duplicates once, persist the cleanup
 }
 function saveCustomDrivers(){
   try{
@@ -2755,8 +2766,11 @@ app.addEventListener("click", (e) => {
     if(!name){ toast("Enter a name for the new driver"); return; }
     const group = panel.querySelector("[data-nd-rarity]").value;
     const rarity = rarityOfGroup(group);
-    if((DEFAULT.drivers[group] || []).some(s => s.name.toLowerCase() === name.toLowerCase())){
-      toast(`"${name}" is already a built-in ${group} driver`);
+    // Check every built-in group, not just the one selected -- a driver can be built-in
+    // under a different rarity than the one the user picked (e.g. Herbert is Legendary),
+    // and letting that through creates a stale duplicate once matched against by name only.
+    if(isBuiltInDriverName(name)){
+      toast(`"${name}" is already a built-in driver`);
       return;
     }
     const statInputs = [...panel.querySelectorAll("[data-nd-stat]")]
