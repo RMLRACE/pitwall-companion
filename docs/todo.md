@@ -44,6 +44,14 @@ authoritative for its own work.
 
 ## Done
 
+- [x] Loadouts → By Track: don't show the same driver twice in the top-2
+      ranking. Owning multiple rarity copies of one driver (each a distinct
+      card/id sharing the driver's name) let both top slots resolve to the
+      same driver — something the game itself never allows, since one
+      driver can't crew both cars. `trackSpecHTML()` now dedupes by driver
+      name while picking the top 2, falling through a duplicate-name copy
+      to the next available distinct driver. PR #31 (2026-08-18)
+
 - [x] Fix a stray "Common" Herbert duplicate. Herbert shipped built-in as the
       23rd Legendary in PR #23, but a `customDrivers` entry added by hand
       *before* that (via Drivers → Add a new driver, likely defaulted to
