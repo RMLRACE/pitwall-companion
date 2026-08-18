@@ -2327,13 +2327,24 @@ function trackSpecHTML(){
       ? "None of your owned drivers are eligible for this GP Event filter — try a higher tier or allow Legendary drivers."
       : "No leveled drivers yet. Set some driver levels on the Drivers tab."}</div>`;
   }else{
-    const ranked = drivers.map(c => {
+    const rankedAll = drivers.map(c => {
       const st = statsView(c.id, c.level, isBoosted(c.id));
       const up = c.level < c.cap ? statsView(c.id, c.level + 1, isBoosted(c.id)) : null;
       return {c, st, up};
     }).sort((a,b) => b.st.vals[dsIdx] - a.st.vals[dsIdx])
-      .map((r, i) => ({...r, rank: i + 1}))
-      .slice(0, 2);
+      .map((r, i) => ({...r, rank: i + 1}));
+    // The game won't let the same driver crew both cars, even if you own more than one
+    // rarity copy of them (each copy is a separate card/id but shares c.name) -- so the
+    // top 2 must be the top 2 *distinct drivers*, falling through duplicate-name copies
+    // to the next available driver rather than showing one driver twice.
+    const ranked = [];
+    const seenNames = new Set();
+    for(const r of rankedAll){
+      if(seenNames.has(r.c.name)) continue;
+      seenNames.add(r.c.name);
+      ranked.push(r);
+      if(ranked.length === 2) break;
+    }
     driversBlock = driverStatTableHTML(ranked, dsIdx, dsLabel);
   }
 
