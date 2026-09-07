@@ -1649,14 +1649,14 @@ function progressHTML(c){
   }
   const atCap = prog.level >= c.cap;
   const w = atCap ? 100 : Math.round(prog.p * 100);
-  const targetLevel = atCap ? c.cap : prog.level + 1;
+  const shownLevel = atCap ? c.cap : prog.level;
   const coin = atCap ? null : coinToNext(c.id, prog.level);
   const cardPart = prog.cost ? `${fmt(Math.min(prog.remaining,prog.cost))} / ${fmt(prog.cost)} cards`
                              : `${fmt(prog.remaining)} cards`;
   const coinPart = coin ? ` &middot; ${fmtCoins(coin)} coins` : "";
   return `<div class="barwrap">
       <div class="bar"><i style="width:${w}%"></i></div>
-      <div class="barlabel"><span>To Lv ${targetLevel}</span><span>${cardPart}${coinPart}</span></div>
+      <div class="barlabel"><span>Max Upgrade Avail. Lv ${shownLevel}</span><span>${cardPart}${coinPart}</span></div>
     </div>`;
 }
 
@@ -2995,7 +2995,7 @@ function refreshAmount(card){
                                : `${fmt(prog.remaining)} cards`;
     const coinPart = coin ? ` &middot; ${fmtCoins(coin)} coins` : "";
     const toLbl = bw.querySelector(".barlabel span:first-child");
-    if(toLbl) toLbl.textContent = `To Lv ${atCap ? c.cap : prog.level + 1}`;
+    if(toLbl) toLbl.textContent = `Max Upgrade Avail. Lv ${atCap ? c.cap : prog.level}`;
     const lbl = bw.querySelector(".barlabel span:last-child");
     if(lbl) lbl.innerHTML = cardPart + coinPart;
   }
