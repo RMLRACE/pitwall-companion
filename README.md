@@ -75,7 +75,7 @@ you add) are stored, since there's no other source for that data.
     combination — one part per category chosen to maximise the selected
     stat(s), with the resulting aggregate stats, Total / Team Score, and an
     *if each part +1 level* projection.
-  - **By Track** — pick one of the **21 in-game circuits** from a dropdown to
+  - **By Track** — pick one of the **22 in-game circuits** from a dropdown to
     see: your best **2 owned drivers** for that track's spotlighted driver
     stat (side by side), a **Suggested Boost** — the top 3 owned consumable
     Boosts ranked by that driver stat first and the track's component stat as
@@ -287,7 +287,7 @@ go offline and it keeps working.
   the same reason: to add boosts as the game introduces them without waiting
   on a code update.
 - **Track Stats are hand-transcribed, not from the workbook.** Neither
-  workbook version has a per-circuit "which stat matters here" table — the 21
+  workbook version has a per-circuit "which stat matters here" table — the 22
   tracks and their driver-stat/component-stat pairing (used by Loadouts → By
   Track) were transcribed directly from the in-game Track Stats screens.
 - **"Boosted +10%" interpretation.** The workbook's *Data Input* sheet exposes a
