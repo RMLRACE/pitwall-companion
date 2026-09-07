@@ -1442,9 +1442,11 @@ function renderChips(){
 
 function pct(card){
   if(card.level >= card.cap) return null;      // MAX
-  const cost = COST[card.level];
-  if(!cost) return { p:0, cost:null };         // unknown cost (e.g. level 0)
-  return { p: Math.min(card.amount / cost, 1), cost };
+  const { level, remaining } = maxAffordableLevel(card);
+  if(level >= card.cap) return { p:1, cost:null, level, remaining }; // banked cards already cover the cap
+  const cost = COST[level];
+  if(!cost) return { p:0, cost:null, level, remaining };             // unknown cost (e.g. level 0)
+  return { p: Math.min(remaining / cost, 1), cost, level, remaining };
 }
 
 /* ----- Reference-data accessors + upgrade math ----- */
@@ -1645,14 +1647,16 @@ function progressHTML(c){
       ? `<span class="trade">♻ ${fmt(tr.trades)} to trade</span>` : "";
     return `<div class="maxrow">★ MAX ${chip}<span class="muted" style="margin-left:auto">Lv ${c.cap}</span></div>`;
   }
-  const w = Math.round(prog.p * 100);
-  const coin = coinToNext(c.id, c.level);
-  const cardPart = prog.cost ? `${fmt(Math.min(c.amount,prog.cost))} / ${fmt(prog.cost)} cards`
-                             : `${fmt(c.amount)} cards`;
+  const atCap = prog.level >= c.cap;
+  const w = atCap ? 100 : Math.round(prog.p * 100);
+  const targetLevel = atCap ? c.cap : prog.level + 1;
+  const coin = atCap ? null : coinToNext(c.id, prog.level);
+  const cardPart = prog.cost ? `${fmt(Math.min(prog.remaining,prog.cost))} / ${fmt(prog.cost)} cards`
+                             : `${fmt(prog.remaining)} cards`;
   const coinPart = coin ? ` &middot; ${fmtCoins(coin)} coins` : "";
   return `<div class="barwrap">
       <div class="bar"><i style="width:${w}%"></i></div>
-      <div class="barlabel"><span>To Lv ${c.level+1}</span><span>${cardPart}${coinPart}</span></div>
+      <div class="barlabel"><span>To Lv ${targetLevel}</span><span>${cardPart}${coinPart}</span></div>
     </div>`;
 }
 
@@ -2983,12 +2987,15 @@ function refreshAmount(card){
   const prog = pct(c);
   const bw = card.querySelector(".barwrap");
   if(prog && bw){
+    const atCap = prog.level >= c.cap;
     const i = bw.querySelector(".bar > i");
-    if(i) i.style.width = Math.round(prog.p*100) + "%";
-    const coin = coinToNext(c.id, c.level);
-    const cardPart = prog.cost ? `${fmt(Math.min(c.amount,prog.cost))} / ${fmt(prog.cost)} cards`
-                               : `${fmt(c.amount)} cards`;
+    if(i) i.style.width = (atCap ? 100 : Math.round(prog.p*100)) + "%";
+    const coin = atCap ? null : coinToNext(c.id, prog.level);
+    const cardPart = prog.cost ? `${fmt(Math.min(prog.remaining,prog.cost))} / ${fmt(prog.cost)} cards`
+                               : `${fmt(prog.remaining)} cards`;
     const coinPart = coin ? ` &middot; ${fmtCoins(coin)} coins` : "";
+    const toLbl = bw.querySelector(".barlabel span:first-child");
+    if(toLbl) toLbl.textContent = `To Lv ${atCap ? c.cap : prog.level + 1}`;
     const lbl = bw.querySelector(".barlabel span:last-child");
     if(lbl) lbl.innerHTML = cardPart + coinPart;
   }
