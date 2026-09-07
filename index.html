@@ -1594,23 +1594,46 @@ function statsView(id, level, boosted){
   return boosted ? applyBoost(st) : st;
 }
 
-// Preview the change from current level to the next (null if not previewable).
+// Highest level reachable from `c.level` by spending `c.amount` banked cards
+// through consecutive COST thresholds (a big enough stash can skip more than
+// one level at once). Returns the reached level and any leftover cards.
+function maxAffordableLevel(c){
+  let level = c.level;
+  let remaining = Math.max(0, c.amount);
+  while(level < c.cap){
+    const cost = COST[level];
+    if(!cost || remaining < cost) break;
+    remaining -= cost;
+    level++;
+  }
+  return { level, remaining };
+}
+
+// Preview the change from current level to the highest level affordable with
+// cards on hand (null if not previewable, or if there aren't enough banked
+// cards yet to afford even the next level).
 function upgradePreview(c){
   if(c.level >= c.cap) return null;
+  const { level: toLevel } = maxAffordableLevel(c);
+  if(toLevel <= c.level) return null;         // not enough banked cards yet
   const cur = statsAt(c.id, c.level);
-  const next = statsAt(c.id, c.level + 1);
-  if(!next) return null;                      // no data for the next level
-  const cardCost = COST[c.level] || null;     // cards to reach next level
-  const coinCost = coinToNext(c.id, c.level); // coins to reach next level
+  const next = statsAt(c.id, toLevel);
+  if(!next) return null;                      // no data for the reached level
+  let cardCost = 0, coinCost = 0, hasCoinCost = true;
+  for(let k = c.level; k < toLevel; k++){
+    cardCost += (COST[k] || 0);
+    const step = coinToNext(c.id, k);
+    if(step == null) hasCoinCost = false; else coinCost += step;
+  }
   const rows = next.names.map((n,i) => {
     const from = cur ? cur.vals[i] : 0;
     return { n, from, to:next.vals[i], d: next.vals[i] - from };
   });
   return {
-    rows, toLevel:c.level + 1,
+    rows, toLevel,
     totalFrom: cur ? cur.total : 0, totalTo: next.total,
     teamFrom: cur ? cur.team : 0, teamTo: next.team,
-    cardCost, coinCost
+    cardCost, coinCost: hasCoinCost ? coinCost : null
   };
 }
 
