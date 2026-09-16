@@ -957,6 +957,7 @@ let group = "All";         // active filter chip
 let query = "";            // search text
 let season = {};           // season dashboard state (see SEASON_DEFAULT)
 let seriesFilter = "All";  // collection: filter by unlock Series
+let rarityFilter = "All";  // components: filter by rarity, independent of the group (slot) filter
 let sortBy = "default";    // collection: sort order
 let toolView = "drivers";  // Tools tab sub-view: "drivers" | "loadouts" | "compare"
 let cmpKind = "d";         // Compare scope: "d" drivers | "c" components
@@ -1820,9 +1821,23 @@ function collectionBar(){
     ["total","Total ↓"],["team","Team ↓"],["name","Name A–Z"]];
   const sortOpts = sorts.map(([v,l]) =>
     `<option value="${v}"${v===sortBy?" selected":""}>${l}</option>`).join("");
+  // Parts have a rarity independent of the group (component slot) filter -- Drivers already
+  // filter by rarity via the group chip, so this second axis only applies to Parts.
+  let rarityBar = "";
+  if(tab === "components"){
+    const order = ["Common","Rare","Epic","Legendary","Special"];
+    const rarityVals = [...new Set(COMPONENT_GROUPS.flatMap(g =>
+      (DEFAULT.components[g] || []).map(s => s.rarity)))]
+      .sort((a,b) => order.indexOf(a) - order.indexOf(b));
+    const rarityOpts = ["All", ...rarityVals]
+      .map(v => `<option value="${v}"${v===rarityFilter?" selected":""}>${v==="All"?"All rarities":v}</option>`).join("");
+    rarityBar = `<label class="cb"><span>Rarity</span>
+      <select data-cb="rarity" aria-label="Filter by rarity">${rarityOpts}</select></label>`;
+  }
   return `<div class="colbar">
     <label class="cb"><span>Series</span>
       <select data-cb="series" aria-label="Filter by series">${srOpts}</select></label>
+    ${rarityBar}
     <label class="cb"><span>Sort</span>
       <select data-cb="sort" aria-label="Sort cards">${sortOpts}</select></label>
   </div>`;
@@ -1838,6 +1853,7 @@ function render(){
   const active = group === "All" ? groups : [group];
   const q = query.trim().toLowerCase();
   const sf = seriesFilter === "All" ? null : Number(seriesFilter);
+  const rf = (tab === "components" && rarityFilter !== "All") ? rarityFilter : null;
   let html = "";
   let total = 0;
 
@@ -1849,7 +1865,8 @@ function render(){
         return e;
       })
       .filter(c => !q || c.name.toLowerCase().includes(q))
-      .filter(c => sf == null || seriesOf(c.id) === sf);
+      .filter(c => sf == null || seriesOf(c.id) === sf)
+      .filter(c => rf == null || c.rarity === rf);
     if(!cards.length) continue;
     if(sortBy !== "default") cards = sortCards(cards);
     total += cards.length;
@@ -1865,12 +1882,14 @@ function render(){
   }
 }
 
-// "To max" totals for the ACTIVE tab, scoped to the given groups (ignores search).
-function tabTotals(groups){
+// "To max" totals for the ACTIVE tab, scoped to the given groups and (optionally) rarity
+// (ignores search).
+function tabTotals(groups, rarity){
   let cards = 0, coins = 0, maxed = 0, count = 0, surplus = 0, trades = 0;
   for(const g of groups){
     for(const seed of seedList(tab, g)){
       const c = effective(tab, g, seed);
+      if(rarity && c.rarity !== rarity) continue;
       count++;
       if(c.level >= c.cap){
         maxed++;
@@ -1889,8 +1908,10 @@ function tabTotals(groups){
 
 function summaryHTML(){
   const groups = group === "All" ? groupsFor(tab) : [group];
-  const t = tabTotals(groups);
-  const label = group === "All" ? (tab === "drivers" ? "Drivers" : "Components") : group;
+  const rf = (tab === "components" && rarityFilter !== "All") ? rarityFilter : null;
+  const t = tabTotals(groups, rf);
+  let label = group === "All" ? (tab === "drivers" ? "Drivers" : "Components") : group;
+  if(rf) label = group === "All" ? rf : `${rf} ${label}`;
   const tradeLine = (t.surplus > 0)
     ? `<div class="sum-trade">♻ ${fmt(t.surplus)} surplus cards &middot;
          <b>${fmt(t.trades)}</b> asset trade${t.trades===1?"":"s"} available</div>` : "";
@@ -2891,11 +2912,12 @@ app.addEventListener("change", (e) => {
   updateCard(card);
 });
 
-// Collection filter/sort bar (Series filter + Sort order).
+// Collection filter/sort bar (Series filter + Rarity filter + Sort order).
 app.addEventListener("change", (e) => {
   const sel = e.target.closest("[data-cb]");
   if(!sel) return;
   if(sel.dataset.cb === "series") seriesFilter = sel.value;
+  else if(sel.dataset.cb === "rarity") rarityFilter = sel.value;
   else if(sel.dataset.cb === "sort") sortBy = sel.value;
   render();
 });
@@ -3110,7 +3132,7 @@ function resetData(){
 document.querySelectorAll(".tabs button").forEach(b => {
   b.addEventListener("click", () => {
     if(tab === b.dataset.tab) return;
-    tab = b.dataset.tab; group = groupFilters[tab] || "All"; seriesFilter = "All"; sortBy = "default";
+    tab = b.dataset.tab; group = groupFilters[tab] || "All"; seriesFilter = "All"; rarityFilter = "All"; sortBy = "default";
     document.querySelectorAll(".tabs button").forEach(x =>
       x.setAttribute("aria-selected", x===b ? "true" : "false"));
     render();
