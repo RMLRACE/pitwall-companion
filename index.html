@@ -1865,10 +1865,10 @@ function render(){
   }
 }
 
-// Collection-wide "to max" totals for the ACTIVE tab (ignores search/filter).
-function tabTotals(){
+// "To max" totals for the ACTIVE tab, scoped to the given groups (ignores search).
+function tabTotals(groups){
   let cards = 0, coins = 0, maxed = 0, count = 0, surplus = 0, trades = 0;
-  for(const g of groupsFor(tab)){
+  for(const g of groups){
     for(const seed of seedList(tab, g)){
       const c = effective(tab, g, seed);
       count++;
@@ -1888,8 +1888,9 @@ function tabTotals(){
 }
 
 function summaryHTML(){
-  const t = tabTotals();
-  const label = tab === "drivers" ? "Drivers" : "Components";
+  const groups = group === "All" ? groupsFor(tab) : [group];
+  const t = tabTotals(groups);
+  const label = group === "All" ? (tab === "drivers" ? "Drivers" : "Components") : group;
   const tradeLine = (t.surplus > 0)
     ? `<div class="sum-trade">♻ ${fmt(t.surplus)} surplus cards &middot;
          <b>${fmt(t.trades)}</b> asset trade${t.trades===1?"":"s"} available</div>` : "";
