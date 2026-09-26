@@ -157,7 +157,12 @@
   .bar{height:8px; border-radius:999px; background:var(--surface-2); overflow:hidden; border:1px solid var(--line)}
   .bar>i{display:block; height:100%; width:0; background:linear-gradient(90deg,var(--accent),var(--ok)); transition:width .18s ease}
   .barwrap{display:flex; flex-direction:column; gap:5px}
-  .barlabel{display:flex; justify-content:space-between; font-size:11px; color:var(--muted)}
+  .barlabel{display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:11px; color:var(--muted)}
+  .barlabel .lv{
+    display:inline-block; margin-left:4px; padding:1px 7px; border-radius:999px;
+    background:var(--accent); color:#0b0f1a; font-weight:800; font-size:11px; letter-spacing:.02em;
+  }
+  .barlabel .lv.max{background:var(--ok); letter-spacing:.06em}
   .maxrow{display:flex; align-items:center; gap:6px; color:var(--gold); font-weight:800; font-size:13px}
   .maxrow .trade{
     color:var(--gold); font-weight:800; font-size:11px; letter-spacing:.02em;
@@ -1640,6 +1645,12 @@ function upgradePreview(c){
   };
 }
 
+// Pill for the level the banked cards reach -- "MAX" once that is the card's cap.
+function upgradeLevelHTML(level, cap){
+  return level >= cap ? `Max Upgrade Avail. <b class="lv max">MAX</b>`
+                      : `Max Upgrade Avail. <b class="lv">Lv ${level}</b>`;
+}
+
 function progressHTML(c){
   const prog = pct(c);
   if(prog === null){
@@ -1657,7 +1668,7 @@ function progressHTML(c){
   const coinPart = coin ? ` &middot; ${fmtCoins(coin)} coins` : "";
   return `<div class="barwrap">
       <div class="bar"><i style="width:${w}%"></i></div>
-      <div class="barlabel"><span>Max Upgrade Avail. Lv ${shownLevel}</span><span>${cardPart}${coinPart}</span></div>
+      <div class="barlabel"><span>${upgradeLevelHTML(shownLevel, c.cap)}</span><span>${cardPart}${coinPart}</span></div>
     </div>`;
 }
 
@@ -3019,7 +3030,7 @@ function refreshAmount(card){
                                : `${fmt(prog.remaining)} cards`;
     const coinPart = coin ? ` &middot; ${fmtCoins(coin)} coins` : "";
     const toLbl = bw.querySelector(".barlabel span:first-child");
-    if(toLbl) toLbl.textContent = `Max Upgrade Avail. Lv ${atCap ? c.cap : prog.level}`;
+    if(toLbl) toLbl.innerHTML = upgradeLevelHTML(atCap ? c.cap : prog.level, c.cap);
     const lbl = bw.querySelector(".barlabel span:last-child");
     if(lbl) lbl.innerHTML = cardPart + coinPart;
   }
