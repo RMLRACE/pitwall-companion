@@ -44,6 +44,11 @@ authoritative for its own work.
 
 ## Done
 
+- [x] Label the bar's card count "spare cards" at `MAX`. The figure was
+      already the leftover after paying for every level to the cap, but the
+      bare "N cards" read like the full banked total. Shared `barCardText()`
+      now drives both the first render and the live refresh. (2026-09-26)
+
 - [x] Highlight the reachable level on the progress bar. "Max Upgrade
       Avail." is followed by a blue `Lv N` pill, or a green `MAX` pill once
       the banked cards reach the card's cap; `refreshAmount()` keeps it live
