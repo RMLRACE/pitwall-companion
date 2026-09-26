@@ -1645,6 +1645,14 @@ function upgradePreview(c){
   };
 }
 
+// Right-hand bar text. At the cap, `remaining` is what is left after paying for
+// every level up to it, so label it "spare" rather than a bare card count.
+function barCardText(prog, atCap){
+  if(atCap) return `${fmt(prog.remaining)} spare cards`;
+  return prog.cost ? `${fmt(Math.min(prog.remaining,prog.cost))} / ${fmt(prog.cost)} cards`
+                   : `${fmt(prog.remaining)} cards`;
+}
+
 // Pill for the level the banked cards reach -- "MAX" once that is the card's cap.
 function upgradeLevelHTML(level, cap){
   return level >= cap ? `Max Upgrade Avail. <b class="lv max">MAX</b>`
@@ -1663,8 +1671,7 @@ function progressHTML(c){
   const w = atCap ? 100 : Math.round(prog.p * 100);
   const shownLevel = atCap ? c.cap : prog.level;
   const coin = atCap ? null : coinToNext(c.id, prog.level);
-  const cardPart = prog.cost ? `${fmt(Math.min(prog.remaining,prog.cost))} / ${fmt(prog.cost)} cards`
-                             : `${fmt(prog.remaining)} cards`;
+  const cardPart = barCardText(prog, atCap);
   const coinPart = coin ? ` &middot; ${fmtCoins(coin)} coins` : "";
   return `<div class="barwrap">
       <div class="bar"><i style="width:${w}%"></i></div>
@@ -3026,8 +3033,7 @@ function refreshAmount(card){
     const i = bw.querySelector(".bar > i");
     if(i) i.style.width = (atCap ? 100 : Math.round(prog.p*100)) + "%";
     const coin = atCap ? null : coinToNext(c.id, prog.level);
-    const cardPart = prog.cost ? `${fmt(Math.min(prog.remaining,prog.cost))} / ${fmt(prog.cost)} cards`
-                               : `${fmt(prog.remaining)} cards`;
+    const cardPart = barCardText(prog, atCap);
     const coinPart = coin ? ` &middot; ${fmtCoins(coin)} coins` : "";
     const toLbl = bw.querySelector(".barlabel span:first-child");
     if(toLbl) toLbl.innerHTML = upgradeLevelHTML(atCap ? c.cap : prog.level, c.cap);
