@@ -44,6 +44,10 @@ authoritative for its own work.
 
 ## Done
 
+- [x] Correct Silverstone's Track Stats: driver stat is Tyre Management, not
+      Overtaking (component stat Speed was already right). Confirmed from the
+      in-game Track Stats screen. (2026-09-26)
+
 - [x] Label the bar's card count "spare cards" at `MAX`. The figure was
       already the leftover after paying for every level to the cap, but the
       bare "N cards" read like the full banked total. Shared `barCardText()`
