@@ -44,6 +44,10 @@ authoritative for its own work.
 
 ## Done
 
+- [x] Add a "Cards ↓" collection sort — orders cards by the banked count in
+      the CARDS box, highest first, name A–Z on ties. Separate from "Total ↓",
+      which sorts by stat total. (2026-09-26)
+
 - [x] Fix a stray "Common" Herbert duplicate. Herbert shipped built-in as the
       23rd Legendary in PR #23, but a `customDrivers` entry added by hand
       *before* that (via Drivers → Add a new driver, likely defaulted to
