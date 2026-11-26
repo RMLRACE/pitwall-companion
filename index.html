@@ -608,6 +608,12 @@ const GROUP_FILTER_SCHEMA = 1;
 const CUSTOM_DRIVERS_KEY = "f1sheet.customDrivers.v1";
 const CUSTOM_DRIVERS_SCHEMA = 1;
 
+// User-added custom Components, kept separately from Drivers because component names
+// are only unique inside their car slot (for example, a front wing and brake could
+// legitimately share a name).
+const CUSTOM_COMPONENTS_KEY = "f1sheet.customComponents.v1";
+const CUSTOM_COMPONENTS_SCHEMA = 1;
+
 // Whether the first-launch feature-tour slideshow has been dismissed — own
 // namespaced, schema-guarded key, same convention as the others above.
 const ONBOARDING_KEY = "f1sheet.onboarding.v1";
@@ -986,6 +992,7 @@ let driversPick1 = null;          // Tools > Drivers: explicit driver id for com
 let driversPick2 = null;          // Tools > Drivers: explicit driver id for comparison slot 2, or null for auto rank #2
 let customDrivers = [];           // [{name, rarity, level, amount, vals:[5 stats]}] user-added Drivers,
                                    // alongside the built-in DEFAULT.drivers/REF entries
+let customComponents = [];        // [{name, group, rarity, level, amount, vals:[9 stats]}]
 
 // Turn a schema-1 payload into a schema-2 one. Schema-1 diffs were taken against the
 // old non-zero seed, so any card the user left alone has NO entry — its value lived in
@@ -1211,6 +1218,39 @@ function applyCustomDrivers(){
   }
 }
 
+/* ---------- Custom (user-added) Components ---------- */
+function isBuiltInComponentName(group, name){
+  const n = name.toLowerCase();
+  return (DEFAULT.components[group] || []).some(s => s.name.toLowerCase() === n);
+}
+function loadCustomComponents(){
+  customComponents = [];
+  try{
+    const raw = localStorage.getItem(CUSTOM_COMPONENTS_KEY);
+    if(!raw) return;
+    const data = JSON.parse(raw);
+    if(data && typeof data === "object" && data.schema === CUSTOM_COMPONENTS_SCHEMA && Array.isArray(data.components)){
+      customComponents = data.components;
+    }
+  }catch(e){ /* corrupt storage -> none custom */ }
+  const before = customComponents.length;
+  customComponents = customComponents.filter(c =>
+    COMPONENT_GROUPS.includes(c.group) && !isBuiltInComponentName(c.group, c.name));
+  if(customComponents.length !== before) saveCustomComponents();
+}
+function saveCustomComponents(){
+  try{
+    localStorage.setItem(CUSTOM_COMPONENTS_KEY, JSON.stringify({
+      schema:CUSTOM_COMPONENTS_SCHEMA, components:customComponents, savedAt:new Date().toISOString()
+    }));
+  }catch(e){ toast("Couldn't save — storage full?"); }
+}
+function applyCustomComponents(){
+  for(const c of customComponents){
+    REF[idFor("components", c.group, c)] = synthesizeComponentRef(c.group, c.rarity, c.level, c.vals);
+  }
+}
+
 /* ---------- Onboarding: first-launch feature-tour slideshow ---------- */
 let onboardingSeen = false;   // whether it's already been dismissed on this device
 let onboardingActive = false; // currently showing
@@ -1422,6 +1462,12 @@ function groupsFor(tabName){
 }
 function seedList(tabName, groupName){
   const base = DEFAULT[tabName][groupName] || [];
+  if(tabName === "components"){
+    const custom = customComponents
+      .filter(c => c.group === groupName)
+      .map(c => ({name:c.name, rarity:c.rarity, level:c.level, amount:c.amount}));
+    return base.concat(custom);
+  }
   if(tabName !== "drivers") return base;
   // Custom drivers saved before Paddock Picks existed have no `group` -- back then the
   // section name and the rarity were always the same word, so fall back to the rarity.
@@ -1505,6 +1551,7 @@ function seriesOf(id){ const r = REF[id]; return r && r.sr ? r.sr : null; }
 // Driver stat key order used by every driver REF entry's `n` field (fixed, matches
 // DRIVER_STAT_LABELS below).
 const DRIVER_STAT_KEYS = ["overtaking","defending","qualifying","raceStart","tyreUse"];
+const COMPONENT_STAT_LABELS = ["Speed","Cornering","Power Unit","Qualifying","Pit Time","Overtake M","Impact","Duration","Recharge"];
 
 // Build a REF-shaped entry for a user-added driver from one screenshot: a rarity, the
 // level it was taken at, and that level's 5 stat values (in DRIVER_STAT_KEYS order).
@@ -1548,6 +1595,18 @@ function synthesizeDriverRef(rarity, level, vals, excludeIds){
   const tot = new Array(level).fill(null); tot[level-1] = total;
   const team = new Array(level).fill(null); team[level-1] = total;
   return { r:rarity, g:rarity, k:"d", n:DRIVER_STAT_KEYS, s, tot, team,
+    cu:[], ct:[], ku:[], kt:[], sr:null };
+}
+
+// Unlike drivers, components do not share a predictable stat permutation curve. Keep the
+// exact level supplied from the screenshot, which makes the card useful immediately while
+// avoiding made-up values for levels the player has not provided.
+function synthesizeComponentRef(group, rarity, level, vals){
+  const s = new Array(level).fill(null); s[level-1] = vals.slice();
+  const total = Math.round(vals.reduce((sum, value) => sum + value, 0));
+  const tot = new Array(level).fill(null); tot[level-1] = total;
+  const team = new Array(level).fill(null); team[level-1] = total;
+  return { r:rarity, g:group, k:"c", n:COMPONENT_STAT_LABELS, s, tot, team,
     cu:[], ct:[], ku:[], kt:[], sr:null };
 }
 
@@ -1894,7 +1953,8 @@ function render(){
   }
 
   const bar = collectionBar();
-  const addForm = tab === "drivers" ? addDriverFormHTML() : "";
+  const addForm = tab === "drivers" ? addDriverFormHTML()
+    : (tab === "components" ? addComponentFormHTML() : "");
   app.innerHTML = summaryHTML() + bar + html + addForm + toolbarHTML();
   if(total === 0){
     app.innerHTML = summaryHTML() + bar + `<div class="empty">No cards match your filters.</div>` + addForm + toolbarHTML();
@@ -2741,6 +2801,38 @@ function addDriverFormHTML(){
   </details>`;
 }
 
+// Components use the same screenshot-first approach as drivers. A component's stat curve
+// cannot safely be extrapolated from one row, so only the entered level carries stats.
+function addComponentFormHTML(){
+  const groupOpts = COMPONENT_GROUPS.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join("");
+  const rarityOrder = ["Common","Rare","Epic","Legendary","Special"];
+  const rarities = [...new Set(COMPONENT_GROUPS.flatMap(g =>
+    (DEFAULT.components[g] || []).map(c => c.rarity)))].sort((a,b) => rarityOrder.indexOf(a) - rarityOrder.indexOf(b));
+  const rarityOpts = rarities.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join("");
+  const fields = [
+    `<div class="nb-field"><label for="nc-group">Component slot</label>
+      <select id="nc-group" data-nc-group>${groupOpts}</select></div>`,
+    `<div class="nb-field"><label for="nc-rarity">Rarity</label>
+      <select id="nc-rarity" data-nc-rarity>${rarityOpts}</select></div>`,
+    `<div class="nb-field"><label for="nc-level">Level</label>
+      <input id="nc-level" type="number" inputmode="numeric" min="1" step="1" value="1" data-nc-level></div>`,
+    `<div class="nb-field"><label for="nc-amount">Cards owned</label>
+      <input id="nc-amount" type="number" inputmode="numeric" min="0" step="1" placeholder="0" data-nc-amount></div>`,
+    ...COMPONENT_STAT_LABELS.map((label,i) => `
+      <div class="nb-field"><label for="nc-stat-${i}">${esc(label)}</label>
+        <input id="nc-stat-${i}" type="number" inputmode="decimal" step="0.01" placeholder="0" data-nc-stat="${i}"></div>`)
+  ].join("");
+  return `<details class="panel coll-details">
+    <summary class="coll-summary">Add a new component<span class="hint">not on the sheet yet? Add one from a screenshot</span></summary>
+    <div class="nb-name-field">
+      <label for="nc-name">Name</label>
+      <input id="nc-name" type="text" placeholder="e.g. Apex" data-nc-name>
+    </div>
+    <div class="nb-grid">${fields}</div>
+    <button type="button" class="nb-add" data-nc-add>Add Component</button>
+  </details>`;
+}
+
 function toolbarHTML(){
   return `<div class="toolbar">
     <button data-tool="export" type="button">⬇︎ Export</button>
@@ -2870,6 +2962,39 @@ app.addEventListener("click", (e) => {
     else customDrivers.push(entry);
     saveCustomDrivers();
     applyCustomDrivers();
+    render();
+    toast(`"${name}" added`);
+    return;
+  }
+  // Parts tab: Add a new component form submit
+  const ncAdd = e.target.closest("[data-nc-add]");
+  if(ncAdd){
+    const panel = ncAdd.closest(".panel");
+    const name = panel.querySelector("[data-nc-name]").value.trim();
+    if(!name){ toast("Enter a name for the new component"); return; }
+    const group = panel.querySelector("[data-nc-group]").value;
+    if(isBuiltInComponentName(group, name)){
+      toast(`"${name}" is already a built-in component in ${group}`);
+      return;
+    }
+    const statInputs = [...panel.querySelectorAll("[data-nc-stat]")]
+      .sort((a,b) => +a.dataset.ncStat - +b.dataset.ncStat);
+    if(statInputs.some(inp => inp.value.trim() === "")){
+      toast("Fill in all component stat values from the screenshot");
+      return;
+    }
+    const vals = statInputs.map(inp => Number(inp.value));
+    if(vals.some(v => !Number.isFinite(v))){ toast("Enter valid component stat values"); return; }
+    const rarity = panel.querySelector("[data-nc-rarity]").value;
+    const level = Math.max(1, Math.round(+panel.querySelector("[data-nc-level]").value || 1));
+    const amount = Math.max(0, Math.round(+panel.querySelector("[data-nc-amount]").value || 0));
+    const entry = {name, group, rarity, level, amount, vals};
+    const existingIdx = customComponents.findIndex(c =>
+      c.group === group && c.name.toLowerCase() === name.toLowerCase());
+    if(existingIdx >= 0) customComponents[existingIdx] = entry;
+    else customComponents.push(entry);
+    saveCustomComponents();
+    applyCustomComponents();
     render();
     toast(`"${name}" added`);
     return;
@@ -3239,6 +3364,8 @@ loadCustomBoosts();
 loadGroupFilter();
 loadCustomDrivers();
 applyCustomDrivers();
+loadCustomComponents();
+applyCustomComponents();
 render();
 loadOnboardingSeen();
 onboardingActive = !onboardingSeen;
